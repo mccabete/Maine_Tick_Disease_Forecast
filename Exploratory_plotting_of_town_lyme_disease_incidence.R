@@ -59,7 +59,6 @@ for( i in seq_along(file_path)){
 }
 
 ## LST
-
 lst <- matrix(data= NA, nrow = 1, ncol = 3)
 lst <- as.data.frame(lst)
 names(lst) <- c("date", "lst", "town")
@@ -72,5 +71,4 @@ for( i in seq_along(file_path)){
 }
 
 
-
-
+### Aggrigating to annual 
