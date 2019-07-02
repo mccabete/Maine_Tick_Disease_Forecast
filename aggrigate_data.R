@@ -20,9 +20,10 @@ library(tidyverse)
 time_series <- "data_raw/Final_Time_Series" # work with real time series
 towns <- list.files(time_series) # list of towns that have final time series
 
-aggrigate_data <- function(){
+aggrigate_data <- function(met.file){
+  data.aggrigated <- list()
   for(t in seq_along(towns)){
-    data <- read.xlsx(file.path(time_series, towns[t], "VPD.xlsx"), sheetIndex = 1)
+    data <- read.xlsx(file.path(time_series, towns[t], met.file), sheetIndex = 1)
     data <- data[,1:2]
     colnames(data) <- c("date", "val")
     
@@ -34,17 +35,23 @@ aggrigate_data <- function(){
     data <- separate(data, date, c("year", "month", "day"), sep = "-")
     
     ## hold out years 2016-2019 for validation
-    data <- data %>% filter(!(year %in% c("2016", "2017", "2018", "2019")))
+    year.fit <- as.character(2008:2015)
+    data <- data %>% filter(year %in% year.fit)
+    
+    ## convert aqua- and terra-modis land surface temperature to deg. C
+    if(met.file %in% c("Aqua_LST.xlsx", "Terra_LST.xlsx")){
+      data$val <- data$val*0.02 - 273.15
+    }
     
     ## year mean
     year.mean <- data %>%
       group_by(year) %>% 
-      dplyr::summarise(mean = mean(val), na.rm = TRUE)
+      dplyr::summarise(mean = mean(val, na.rm = TRUE))
     
     ## year max
     year.max <- data %>%
       group_by(year) %>% 
-      dplyr::summarise(max = max(val), na.rm = TRUE)
+      dplyr::summarise(max = max(val, na.rm = TRUE))
     
     ## define "summer"
     summer.months <- c("04", "05", "06", "07", "08")
@@ -53,18 +60,19 @@ aggrigate_data <- function(){
     summer.mean <- data %>%
       filter(month %in% summer.months) %>% 
       group_by(year) %>% 
-      dplyr::summarise(mean = mean(val), na.rm = TRUE)
+      dplyr::summarise(mean = mean(val, na.rm = TRUE))
     
     ## summer max
     summer.max <- data %>%
       filter(month %in% summer.months) %>% 
       group_by(year) %>% 
-      dplyr::summarise(max = max(val), na.rm = TRUE)
+      dplyr::summarise(max = max(val, na.rm = TRUE))
     
-    data.aggrigated[[t]] <- list(year.mean = scale(year.mean, scale = FALSE),
-                                 year.max = scale(year.max, scale = FALSE),
-                                 summer.mean = scale(summer.mean, scale = FALSE),
-                                 summer.max = scale(summer.max, scale = FALSE))
+    data.aggrigated[[t]] <- list(year.mean = scale(year.mean[,2], scale = FALSE),
+                                 year.max = scale(year.max[,2], scale = FALSE),
+                                 summer.mean = scale(summer.mean[,2], scale = FALSE),
+                                 summer.max = scale(summer.max[,2], scale = FALSE),
+                                 year = year.fit)
     print(t) # counter
   
   }
@@ -72,5 +80,5 @@ aggrigate_data <- function(){
   return(data.aggrigated)
 }
 
-# test <- aggrigate_data()
+# test <- aggrigate_data(met.file)
 
