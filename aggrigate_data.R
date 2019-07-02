@@ -10,7 +10,7 @@
 ### can add more complexity such as user defined aggrigation, tho this would most likely 
 ### have to be a predifined function (median)
 ###
-### don't think this will work with "Terra_LST.xlsx" as it has missing values (add na.rm = TRUE??)
+### "Terra_LST.xlsx" and "aqua_LST.xlsx"  have has missing values added na.rm = TRUE 
 
 library(xlsx)
 library(lubridate)
@@ -22,7 +22,7 @@ towns <- list.files(time_series) # list of towns that have final time series
 
 aggrigate_data <- function(){
   for(t in seq_along(towns)){
-    data <- read.xlsx(file.path(time_series, towns[t], "Daymet_max.xlsx"), sheetIndex = 1)
+    data <- read.xlsx(file.path(time_series, towns[t], "Aqua_LST.xlsx"), sheetIndex = 1)
     data <- data[,1:2]
     colnames(data) <- c("date", "val")
     
@@ -36,12 +36,12 @@ aggrigate_data <- function(){
     ## year mean
     year.mean <- data %>%
       group_by(year) %>% 
-      dplyr::summarise(mean = mean(val))
+      dplyr::summarise(mean = mean(val), na.rm = TRUE)
     
     ## year max
     year.max <- data %>%
       group_by(year) %>% 
-      dplyr::summarise(max = max(val))
+      dplyr::summarise(max = max(val), na.rm = TRUE)
     
     ## define "summer"
     summer.months <- c("04", "05", "06", "07", "08")
@@ -50,13 +50,13 @@ aggrigate_data <- function(){
     summer.mean <- data %>%
       filter(month %in% summer.months) %>% 
       group_by(year) %>% 
-      dplyr::summarise(mean = mean(val))
+      dplyr::summarise(mean = mean(val), na.rm = TRUE)
     
     ## summer max
     summer.max <- data %>%
       filter(month %in% summer.months) %>% 
       group_by(year) %>% 
-      dplyr::summarise(max = max(val))
+      dplyr::summarise(max = max(val), na.rm = TRUE)
     
     data.aggrigated[[t]] <- list(year.mean = year.mean,
                                  year.max = year.max,
@@ -69,5 +69,5 @@ aggrigate_data <- function(){
   return(data.aggrigated)
 }
 
-test <- aggrigate_data()
+# test <- aggrigate_data()
 
