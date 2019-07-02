@@ -22,7 +22,7 @@ towns <- list.files(time_series) # list of towns that have final time series
 
 aggrigate_data <- function(){
   for(t in seq_along(towns)){
-    data <- read.xlsx(file.path(time_series, towns[t], "Aqua_LST.xlsx"), sheetIndex = 1)
+    data <- read.xlsx(file.path(time_series, towns[t], "VPD.xlsx"), sheetIndex = 1)
     data <- data[,1:2]
     colnames(data) <- c("date", "val")
     
@@ -32,6 +32,9 @@ aggrigate_data <- function(){
     
     ## separate year, month, day into their own columns
     data <- separate(data, date, c("year", "month", "day"), sep = "-")
+    
+    ## hold out years 2016-2019 for validation
+    data <- data %>% filter(!(year %in% c("2016", "2017", "2018", "2019")))
     
     ## year mean
     year.mean <- data %>%
@@ -58,10 +61,10 @@ aggrigate_data <- function(){
       group_by(year) %>% 
       dplyr::summarise(max = max(val), na.rm = TRUE)
     
-    data.aggrigated[[t]] <- list(year.mean = year.mean,
-                                 year.max = year.max,
-                                 summer.mean = summer.mean,
-                                 summer.max = summer.max)
+    data.aggrigated[[t]] <- list(year.mean = scale(year.mean, scale = FALSE),
+                                 year.max = scale(year.max, scale = FALSE),
+                                 summer.mean = scale(summer.mean, scale = FALSE),
+                                 summer.max = scale(summer.max, scale = FALSE))
     print(t) # counter
   
   }
