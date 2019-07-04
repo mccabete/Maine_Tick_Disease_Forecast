@@ -5,14 +5,20 @@ date: "7/2/2019"
 output: html_document
 ---
 
+```{r}
+library(rjags)
+library(coda)
+library(ggplot2)
+library(dplyr)
+```
+
+
 
 ```{r}
 
-library(rjags)
-
 # load data
-points_of_less_than_six_big <- which(tick_disease_big == "<6")
-points_of_less_than_six <- which(tick_disease_big == "<6")
+points_of_less_than_six_big <- which(tick_disease_big$Number == "<6")
+points_of_less_than_six <- which(tick_disease_big$Number == "<6")
 
 
 ## use non cumberland, non less than six, non 2001-2008 data
@@ -24,20 +30,20 @@ tick_disease_other <- dplyr::filter(tick_disease_big_tmp, tick_disease_big_tmp$Y
 get_tick_disease_probability <- "model{
 ## process model
   for (i in 1:n){
-   number_of_disease_risk[i] <- dbiom(pop[i], probability)
+   number_of_disease_risk[i] ~ dbinom(probability, pop[i])
   }
 
 ## Prior
-probability <- dbeta(1,1) # uniform probability
+probability ~ dbeta(1,1) # close to uniform probability
 }
 "
 
-data <- list(n = length(tick_disease_other$Number),  number_of_disease_risk = as.numeric(tick_disease_other$Number), pop = tick_disease_other$Population)
+data <- list(n = length(tick_disease_other$Number),  number_of_disease_risk = as.numeric(tick_disease_other$Number), pop = as.numeric(tick_disease_other$Population))
   
 nchain = 3
 init <- list()
 for(i in 1:nchain){
-  init[[i]] <- list(m = 0.5, D_0 = 0.016, min_conductance = 0.001)
+  init[[i]] <- list(probability = c(0.15))
 }
 
 
@@ -48,29 +54,77 @@ j.model   <- jags.model (file = textConnection(get_tick_disease_probability),
 
 jags.out   <- coda.samples (model = j.model,
                             variable.names = c("probability"),
-                                n.iter = n.iter)
+                                n.iter = 11000)
+plot(jags.out)
+
+GBR <- gelman.plot(jags.out)
+
+#burnin <- GBR$last.iter[tail(which(apply(GBR$shrink[,,2]>1.05,1,any)),1)+1] #Statement not working. 
+jags.burn <- window(jags.out,start=4000, extend = FALSE)
+
+effectiveSize(jags.burn) # Solid 3x as many as we need
+jags.burn <- as.matrix(jags.burn)
+plot(density(jags.burn), main = "Probability of Tick disease per population member per year")
 
 
-### Fit actual random walk
-random_walk = "
+### Test: Does this meet the same assumptions of the class? (as in, will we see numbers bounded by  1-6?)
+less_than_six_pop <- as.numeric(tick_disease_big$Population[points_of_less_than_six_big])
+prob <- sample(jags.burn, size = length(less_than_six_pop))
+number_of_tick_disease_incidences <- rbinom(length(less_than_six_pop), less_than_six_pop, prob)
+
+```
+
+
+```{r}
+### Solve for a and b parameters of beta distribution
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+options(digits=15)
+mean_prob <- mean(jags.burn)
+mode_prob <- getmode(jags.burn)
+
+# b = (a - mean*a)/mean ## My solving of the two equations to fit the beta distribution
+# b = ((a - 1) - mode*a + mode*2) / mode ## Equation from wikipedia 
+# a = ((1/mode) + 2) / ((1/mean)- (1/mode)) 
+
+a <- ((1/mode_prob) + 2) / ((1/mean_prob)- (1/mode_prob))
+b_1 <- (a - (mean_prob*a))/mean_prob
+b_2 <- (((a - 1) - mode_prob*a) + mode_prob*2)/mode_prob
+
+did_algebra_work_out <- b_1 == b_2 ## Dammit 
+diff <- b_1 - b_2 # Does this difference represent an algebra error or random noise from sampling? 
+
+### Fit random walk
+
+RandomWalk = "
 model{
   
-    D_0_corrected <- D_0 + 0.000001 # To avoid deviding by zero issues
-  for (i in 1:num_points){
-    #### Process Model
-    X[i] <- A[i]/(Ca[i]*(1+(vpd[i]/D_0_corrected)))
-    mu[i] <- min_conductance + m*X[i]
-    gs[i] ~ dnorm(mu[i], precision)
+  #### Data Model
+  for(t in numeric_indices){
+    y[t] ~ dnorm(x[t],tau_obs)
   }
   
+  for(t in less_than_six_indices){
+   y[t] ~ dbinom(probability, pop[t]) T(1,6)
+   y[t] ~ dnorm(x[t], tau_obs)
+  }
+
+  #### Process Model
+  for(t in 2:n){
+    x[t]~dnorm(x[t-1],tau_add)
+  }
   
   #### Priors
-  D_0 ~ dgamma(1.19999, 90) # from ED2 default (0.016), and conversation with Mike (max)
-  m ~ dnorm(stomatal_slope_average, 1/stomatal_slope_var) # Roughtly get from sensitivity analysis 
-  min_conductance ~ dgamma(1.5, 10) ## No clue. I looked at *Optimal stomatal behaviour around the world* which didn't have numbers for g_0 and argued that should just be minimun bound. I am doing a gamma with some varience. 
- precision ~ dgamma(1, 2) ## Guessing
+  x[1] ~ dnorm(x_ic,tau_ic) # Could get from: non-cumberland data, 2007 data, canadian data
+  tau_obs ~ dgamma(a_obs,r_obs) # not sure where, need multiple error estimates
+  tau_add ~ dgamma(a_add,r_add) # could estimate from: non-cumberland data, years we aren't useing, nearby data. 
+  probability ~ 
 }
 "
+
 
 
 data <- list(points_of_less_than_six = , 
