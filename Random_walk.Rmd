@@ -21,8 +21,8 @@ library(dplyr)
 
 # load data
 points_of_less_than_six_big <- which(tick_disease_big$Number == "<6")
-points_of_less_than_six <- which(tick_disease_big$Number == "<6")
-
+points_of_less_than_six <- which(tick_disease$Number == "<6")
+numeric_indices <- which(tick_disease$Number != "<6")
 
 ## use non cumberland, non less than six, non 2001-2008 data
 tick_disease_big_tmp <- tick_disease_big[tick_disease_big$Number != "<6",]
@@ -86,6 +86,9 @@ estBetaParams <- function(mu, var) {
   return(params = list(alpha = alpha, beta = beta))
 }
 
+mean_prob <- mean(jags.burn)
+var_prob <- var(jags.burn)
+
 beta_params <- estBetaParams(mean_prob, var_prob)
 
 ```
@@ -113,61 +116,103 @@ Some national error estimates include [this paper](https://academic.oup.com/cid/
  
 *Maine Estimates of errors*
 
-[There are 2011-2016 estimates of prevelance](https://data.mainepublichealth.gov/tracking/metadata-lyme-prevalence) by town in Maine. Because Prevelance = Incidence x Average duration of disease, we may be able to compare our estimates to prevelance data as measured by the survey. However, prevelance is estimated by the question "Have you ever been told by a doctor, nurse, or other health professional that you have Lyme disease?”. This question does not capture populations that would not have intereacted with medical profesionals. 
+[There are 2011-2016 estimates of prevelance](https://data.mainepublichealth.gov/tracking/metadata-lyme-prevalence) by town in Maine. Because Prevelance = Incidence x Average duration of disease, we may be able to compare our estimates to prevelance data as measured by the survey. However, prevelance is estimated by the question "Have you ever been told by a doctor, nurse, or other health professional that you have Lyme disease?”. This question does not capture populations that would not have intereacted with medical profesionals. However, it could be a cool benchmark on the state/ on the error assosiated with individuals who do intereact with medical profesionals, but who's disease does not meet the criteria of either probable or confirmed. 
+
+Currently, the plan is to make a prior based on the Hinckley et al paper, and discuss possible benchmarkss of the modeled incidence levels as a future work goal/ possibly something we have to discuss with a grain of salt. 
 
 
 ```{r}
+### load data
 
-### Fit random walk
+# For gamma error
+data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 10, a_obs = 2, r_obs = 0.5 , a_add = 2, r_add = 0.5,  y = tick_disease_tmp$Number,  x_ic = 2, tau_ic = 1)
 
-RandomWalk = "
+town_name <- "Windham"
+tick_data <- tick_disease
+
+fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 11000, data_list){
+  
+  tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
+  tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year > 2008)
+  tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year)
+  
+  points_of_less_than_six <- which(tick_disease_tmp$Number == "<6" )
+  numeric_indices <- which(tick_disease_tmp$Number != "<6")
+  
+  if (rlang::is_empty(points_of_less_than_six)){
+   has_suppressed <- FALSE
+  }
+  
+  if(has_suppressed){
+    RandomWalk = "
 model{
   
   #### Data Model
   for(t in numeric_indices){
-    y[t] ~ dnorm(x[t],tau_obs)
-  }
-  
-  for(t in less_than_six_indices){
-   y[t] ~ dbinom(probability, pop[t]) T(1,6) ## Include suppresed data
-   y[t] ~ dnorm(x[t], tau_obs)
+   y[t] ~ dpois(x[t],tau_obs) 
+ }
+ 
+  for(t in less_than_six_indices){ ## Maybe consider a population cutoff, and allow zeros
+   y[t] ~ dpois(x[t]) T(1,5)
   }
 
   #### Process Model
   for(t in 2:n){
-    x[t]~dnorm(x[t-1],tau_add)
+    x[t] ~ dnorm(x[t-1],tau_add)
   }
   
   #### Priors
   x[1] ~ dnorm(x_ic,tau_ic) # Could get from: non-cumberland data, 2007 data, canadian data
-  tau_obs ~ dgamma(a_obs,r_obs) # not sure where, need multiple error estimates
+  tau_obs ~ dgamma(a_obs,r_obs) 
   tau_add ~ dgamma(a_add,r_add) # could estimate from: non-cumberland data, years we aren't useing, nearby data. 
-  probability ~ dbeta(beta_params[1], beta_params[2])
+
 }
 "
+  }else{
+        RandomWalk = "
+model{
+  
+  #### Data Model
+  for(t in numeric_indices){
+   y[t] ~ dpois(x[t]) 
+ }
 
+  #### Process Model
+  for(t in 2:n){
+    x[t] ~ dnorm(x[t-1],tau_add)
+  }
+  
+  #### Priors
+  x[1] ~ dnorm(x_ic,tau_ic) # Could get from: non-cumberland data, 2007 data, canadian data
+  #tau_obs ~ dgamma(a_obs,r_obs) 
+  tau_add ~ dgamma(a_add,r_add) # could estimate from: non-cumberland data, years we aren't useing, nearby data. 
 
+}
+"
+  }
 
-data <- list(points_of_less_than_six = , beta_params = beta_params, 
-            )
+## loading in priors
+#data <- data_list
 
+## setting  initial conditions
 nchain = 3
 init <- list()
 for(i in 1:nchain){
-  init[[i]] <- list(m = 0.5, D_0 = 0.016, min_conductance = 0.001)
+  init[[i]] <- list( tau_obs <- 4, x_ic <- 10)
 }
 
 
-j.model   <- jags.model (file = textConnection(Stomtal_slope),
+j.model   <- jags.model (file = textConnection(RandomWalk),
                              data = data,
-                             inits = init,
+                             #inits = init,
                              n.chains = 3)
 
 jags.out   <- coda.samples (model = j.model,
-                            variable.names = c("m","min_conductance","D_0", "precision"),
+                            variable.names = c( "tau_add", "x"),
                                 n.iter = n.iter)
+
 GBR <- gelman.plot(jags.out)
-burnin <- GBR$last.iter[tail(which(apply(GBR$shrink[,,2]>1.05,1,any)),1)+1]
+#burnin <- GBR$last.iter[tail(which(apply(GBR$shrink[,,2]>1.05,1,any)),1)+1]
 if(is.na(burnin)){
   warning("GBR !< 1.05. Model may have failed to converge")
   jags.burn <- jags.out
@@ -178,26 +223,18 @@ if(is.na(burnin)){
 }
   date_stamp <- Sys.time()
   date_stamp <- format(date_stamp, "%Y%m%d")
-  file_name <- paste("/Users/tess/Documents/work/SERDP_Project/Cogongrass_trait_sampling/Jags_output/", date_stamp, ".", "Stomatal_slope_of",".",leaf_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
+  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_ForecastJags_output/", date_stamp, ".", "random_walk",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
   print(did_it_converge)
   print(effectiveSize(jags.burn))
-  save(jags.burn, file = file_name )
-  #return(jags.burn)
+  #save(jags.burn, file = file_name )
+  return(jags.burn)
 }
 
-### Testing function
-#temp_data <- dplyr::filter(full_curve, Name == "tess-feild-3")
-#run_stomatal_slop_fit(temp_data = temp_data, leaf_name = "tess-feild-3", n.iter = 6000 )
-#effectiveSize(jags.burn)
 
-## Loop over each file (corresponding to each leaf)
-leaves <- unique(full_curve$Name)
-leaves <- leaves[!is.na(leaves)]
 
-for ( i in seq_along(leaves)){
-  temp_data <- dplyr::filter(full_curve, Name == leaves[i])
-  run_stomatal_slop_fit(temp_data = temp_data, leaf_name = leaves[i], n.iter = 6000 )
- 
-}
+test <- fit_random_walk(tick_data = tick_d)
+
+
+
 
 ```
