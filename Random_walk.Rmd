@@ -127,7 +127,10 @@ Currently, the plan is to make a prior based on the Hinckley et al paper, and di
 # For gamma error
 data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 10, a_obs = 2, r_obs = 0.5 , a_add = 2, r_add = 0.5,  y = tick_disease_tmp$Number,  x_ic = 2, tau_ic = 1)
 
-town_name <- "Windham"
+## For lnorm error
+data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 10, a_obs = 2, r_obs = 0.5 , a_add = 2, r_add = 0.5,  y = tick_disease_tmp$Number,  x_ic = 20, tau_ic = 1)
+
+town_name <- "Harrison"
 tick_data <- tick_disease
 
 fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 11000, data_list){
@@ -149,16 +152,17 @@ model{
   
   #### Data Model
   for(t in numeric_indices){
-   y[t] ~ dpois(x[t],tau_obs) 
+   
+   y[t] ~ dbinom(false_negative, x[t])
  }
  
-  for(t in less_than_six_indices){ ## Maybe consider a population cutoff, and allow zeros
-   y[t] ~ dpois(x[t]) T(1,5)
+  for(t in less_than_six_indices){   ## Maybe consider a population cutoff, and allow zeros
+   y[t] ~ dbinom(false_negative, x[t]) T(1,5)
   }
 
   #### Process Model
   for(t in 2:n){
-    x[t] ~ dnorm(x[t-1],tau_add)
+    x[t] ~ dnorm(x[t-1],tau_add) 
   }
   
   #### Priors
@@ -174,8 +178,8 @@ model{
   
   #### Data Model
   for(t in numeric_indices){
-   y[t] ~ dpois(x[t]) 
- }
+   y[t] ~ dbinom(false_negative, x[t])
+  }
 
   #### Process Model
   for(t in 2:n){
@@ -184,8 +188,8 @@ model{
   
   #### Priors
   x[1] ~ dnorm(x_ic,tau_ic) # Could get from: non-cumberland data, 2007 data, canadian data
-  #tau_obs ~ dgamma(a_obs,r_obs) 
-  tau_add ~ dgamma(a_add,r_add) # could estimate from: non-cumberland data, years we aren't useing, nearby data. 
+  false_negative ~ dgamma()
+  tau_add ~  dgamma(a_add,r_add) #could estimate from: non-cumberland data, years we aren't useing, new england data. 
 
 }
 "
@@ -198,17 +202,17 @@ model{
 nchain = 3
 init <- list()
 for(i in 1:nchain){
-  init[[i]] <- list( tau_obs <- 4, x_ic <- 10)
+  init[[i]] <- list( tau_obs <- 4, x_ic <- 10) # Maybe check  these 
 }
 
 
 j.model   <- jags.model (file = textConnection(RandomWalk),
-                             data = data,
+                             data = data_list,
                              #inits = init,
                              n.chains = 3)
 
 jags.out   <- coda.samples (model = j.model,
-                            variable.names = c( "tau_add", "x"),
+                            variable.names = c( "tau_add", "x", "tau_obs"),
                                 n.iter = n.iter)
 
 GBR <- gelman.plot(jags.out)
