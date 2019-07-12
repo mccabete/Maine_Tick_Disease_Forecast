@@ -5,15 +5,21 @@ tick_disease_big <- read.csv("/Users/tess/Documents/work/Maine_Tick_Disease_Fore
 
 tick_disease_big$Population <- gsub(pattern = ",", replacement = "", tick_disease_big$Population)
 
-towns_in_cumberland <- c("Harpswell", "Freeport", "Brunswick", "Pownal", "Fyre_Island", "Yarmouth", 
+towns_in_cumberland <- c("Harpswell", "Freeport", "Brunswick", "Pownal", "Frye_Island", "Yarmouth", 
                          "Cumberland", "Standish", "Chebeague_Island", "Portland", "Falmouth", "South_Portland", 
                          "Cape_Elizabeth", "Long_Island", "Scarborough", "Harrison", "Gray", "North_Yarmouth", 
                          "Baldwin", "Bridgton", "Casco", "Raymond", "Naples", "Sebago", "Windham", "Gorham",
                          "Westbrook", "New_Gloucester")
 unique(tick_disease_big$Number)
 
+towns_for_validation <- c("Bridgton","Sebago",  "Westbrook")
 
+towns_to_run <- towns_in_cumberland[!(towns_in_cumberland %in% towns_for_validation)]
+
+## Correct names for spacing
+tick_disease_big$Location <- gsub(" ", "_", tick_disease_big$Location)
 tick_disease <- tick_disease_big[tick_disease_big$Location %in% towns_in_cumberland, ]
+
 
 unique(tick_disease$Number)
 
