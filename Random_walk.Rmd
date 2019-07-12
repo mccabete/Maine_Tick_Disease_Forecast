@@ -79,7 +79,7 @@ number_of_tick_disease_incidences <- rbinom(length(less_than_six_pop), less_than
 
 
 ```{r}
-### Solve for a and b parameters of beta distribution
+### Solve for a and b parameters of  beta distribution
 estBetaParams <- function(mu, var) {
   alpha <- ((1 - mu) / var - 1 / mu) * mu ^ 2
   beta <- alpha * (1 / mu - 1)
@@ -95,7 +95,7 @@ beta_params <- estBetaParams(mean_prob, var_prob)
 
 Note: Solving the Beta equation parameters useing simultanious equations was actually somewhat non-trivial, and someone already did it. The answer I am useing in from [here](https://stats.stackexchange.com/questions/12232/calculating-the-parameters-of-a-beta-distribution-using-the-mean-and-variance). 
 
-# Prior on error levels of underreporting (tau_obs)
+# Prior on error levels of underreporting (a_obs, b_obs)
 
 This is a tricky number to get, specifically because it is hard to constrain, and also so useful. We wanted to have a CDC-provided estimate of the error to put into the prior, but also anouther estimate to benchmark our modeled output against. Ideally, the prior would be set by a more general estimate of the error, and we could then benchmark against Maine-level estimates. 
 
@@ -103,10 +103,35 @@ This is a tricky number to get, specifically because it is hard to constrain, an
 
 Some national error estimates include [this paper](https://academic.oup.com/cid/article/59/5/676/2895755) by Hinckley et al, which estimates the "true" number of infections in 2008 based on the number of specimines sent into labs, and correcting for false positives and false negatives. It does not estimate the number of incidences where the tick itself was not sent in for testing, but says this could add to the number. 
 
+This paper reports a "True positive rate" of the number of ticks sent for testing. Here I solve for a "false negative rate" and the range that is reported. 
+```{r}
+# reprted "true positive" is 0.12 with range of 0.1 to 0.185. With rate of 0.12,  288 000 cases were reported ( range of 240000 - 444000. 
+
+# Solving for total submited specimines 
+num_tested <- 288000/0.12
+percent_observed_test_1 <- 5.76 # For Two-tiered whole cell 
+percebt_observed_test_2 <- 11.89 # EIA/IFA stand-alone or first tier
+
+false_negative_max <- -1*(5.76 - 18.5) # note I might not even need false negatives. binomial is listed as probability of "sucess" so a "true positive", which the study reports directly
+false_negative_min <- -1*(5.76 - 10 )
+#false_negative_min_test_2 <- -1*(11.98 - 10) # note: only applicable for one test. Not sure which is used in Maine, and likely only one? Data from paper suggested that top one more common. 
+
+estBetaParams <- function(mu, var) {
+  alpha <- ((1 - mu) / var - 1 / mu) * mu ^ 2
+  beta <- alpha * (1 / mu - 1)
+  return(params = list(alpha = alpha, beta = beta))
+}
+
+mu_true_pos <- 0.12
+var_true_pos <- 0.03 # Somethign larger than 0.1 and 0.18, but still constrained by paper
+beta_of_true_tick_rate <- estBetaParams(0.12, 0.03)
+
+```
+
 [This CDC summary](https://www.cdc.gov/mmwr/volumes/66/ss/ss6622a1.htm?s_cid=ss6622a1_w) of the 2008-2015 data notes that tick disease rates are underreported in high-incidence areas but possibly over-reported in low-incidence areas.
   Starting in 2008, the CDC explicitly notes the difference between confirmed cases and probable cases. This difference could be used to estimate some of the error, but is also likely an underestimate because the definition of "probable case" still involves some positive lab results/ medical diagnosis. 
 
-[This estimate](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4550147/) of 2005-2010 national incidence rate useing health insurence claims documents roughly agrees with rate of CDC confirmed cases. 
+[This estimate](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4550147/) of 2005-2010 national incidence rate useing health insurence claims also argues for large number of underreporting. 
 
 [This review](https://www-sciencedirect-com.ezproxy.bu.edu/science/article/pii/S0891552015000240?via%3Dihub) as well as being a thourough general review of lyme in the united states, summerizes some of the liturature attemting to estimate the amount of underreporting in lyme disease, putting it aproximatly 3-12 fold differences. The studies were state/ town specific but the techniqes used were: 
  - In Westchestesr New York a "determinisitc model with plausible ranges" [was used](https://academic.oup.com/aje/article/148/10/1018/135572) to estimate "true" incidence levels. 
@@ -118,26 +143,23 @@ Some national error estimates include [this paper](https://academic.oup.com/cid/
 
 [There are 2011-2016 estimates of prevelance](https://data.mainepublichealth.gov/tracking/metadata-lyme-prevalence) by town in Maine. Because Prevelance = Incidence x Average duration of disease, we may be able to compare our estimates to prevelance data as measured by the survey. However, prevelance is estimated by the question "Have you ever been told by a doctor, nurse, or other health professional that you have Lyme disease?”. This question does not capture populations that would not have intereacted with medical profesionals. However, it could be a cool benchmark on the state/ on the error assosiated with individuals who do intereact with medical profesionals, but who's disease does not meet the criteria of either probable or confirmed. 
 
-Currently, the plan is to make a prior based on the Hinckley et al paper, and discuss possible benchmarkss of the modeled incidence levels as a future work goal/ possibly something we have to discuss with a grain of salt. 
+Currently, the plan is to make a prior based on the Hinckley et al paper, and have our model be predicting the number of people with lyme disease that were tested, but got a negative result. The two gate-keepers for tick disease reporting to the CDC are positive lab results, and identification of symptoms (rash/ clinicaly defined symotoms) and diagnosis by a medical profesional. Out data model will constrain false negatives from the tick lab results, but that will not constrain uderreporting assosiated with access to lab-testing, accesing the medical community, or underreporting within the medical community. We also don't deal with false positives becuase the CDC criteria for reporting has a high level of certainty. 
 
 
 ```{r}
 ### load data
 
-# For gamma error
-data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 10, a_obs = 2, r_obs = 0.5 , a_add = 2, r_add = 0.5,  y = tick_disease_tmp$Number,  x_ic = 2, tau_ic = 1)
+# For binom error
+data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 10, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , a_add = 2, r_add = 0.5,  y = as.numeric(tick_disease_tmp$Number),  x_ic = 5, tau_ic = 1)
 
-## For lnorm error
-data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 10, a_obs = 2, r_obs = 0.5 , a_add = 2, r_add = 0.5,  y = tick_disease_tmp$Number,  x_ic = 20, tau_ic = 1)
-
-town_name <- "Harrison"
+town_name <- "Baldwin"
 tick_data <- tick_disease
 
 fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 11000, data_list){
   
   tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
   tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year > 2008)
-  tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year)
+  tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Number)
   
   points_of_less_than_six <- which(tick_disease_tmp$Number == "<6" )
   numeric_indices <- which(tick_disease_tmp$Number != "<6")
@@ -162,12 +184,12 @@ model{
 
   #### Process Model
   for(t in 2:n){
-    x[t] ~ dnorm(x[t-1],tau_add) 
+    x[t] ~ dpois(x[t-1])#,pop[t]) 
   }
   
   #### Priors
-  x[1] ~ dnorm(x_ic,tau_ic) # Could get from: non-cumberland data, 2007 data, canadian data
-  tau_obs ~ dgamma(a_obs,r_obs) 
+  x[1] ~ dpois(x_ic) #,tau_ic) # Could get from: non-cumberland data, 2007 data, canadian data
+  false_nagative ~ dbeta(a_obs,b_obs) 
   tau_add ~ dgamma(a_add,r_add) # could estimate from: non-cumberland data, years we aren't useing, nearby data. 
 
 }
@@ -183,13 +205,13 @@ model{
 
   #### Process Model
   for(t in 2:n){
-    x[t] ~ dnorm(x[t-1],tau_add)
+    x[t] ~ dpois(x[t-1])#, pop[t]) #,tau_add)
   }
   
   #### Priors
-  x[1] ~ dnorm(x_ic,tau_ic) # Could get from: non-cumberland data, 2007 data, canadian data
-  false_negative ~ dgamma()
-  tau_add ~  dgamma(a_add,r_add) #could estimate from: non-cumberland data, years we aren't useing, new england data. 
+  x[1] ~ dpois(x_ic)#,tau_ic) # Could get from: non-cumberland data, 2007 data, canadian data
+  false_negative ~ dbeta(a_obs, b_obs) # Tied to the false positive rate in 
+  #tau_add ~  dgamma(a_add,r_add) #could estimate from: non-cumberland data, years we aren't useing, new england data. 
 
 }
 "
@@ -212,7 +234,7 @@ j.model   <- jags.model (file = textConnection(RandomWalk),
                              n.chains = 3)
 
 jags.out   <- coda.samples (model = j.model,
-                            variable.names = c( "tau_add", "x", "tau_obs"),
+                            variable.names = c( "tau_add", "x", "false_negative"),
                                 n.iter = n.iter)
 
 GBR <- gelman.plot(jags.out)
@@ -242,3 +264,6 @@ test <- fit_random_walk(tick_data = tick_d)
 
 
 ```
+
+Some notes on different models we tried: 
+- A binomial data model where false_negative 
