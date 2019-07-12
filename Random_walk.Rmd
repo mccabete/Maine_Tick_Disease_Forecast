@@ -150,9 +150,9 @@ Currently, the plan is to make a prior based on the Hinckley et al paper, and ha
 ### load data
 
 # For binom error
-data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 10, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , a_add = 2, r_add = 0.5,  y = as.numeric(tick_disease_tmp$Number),  x_ic = 5, tau_ic = 1)
+data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 10, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , a_add = 2, r_add = 0.5,  y = as.numeric(tick_disease_tmp$Number),  x_ic = 55, tau_ic = 1,yearly_error = 2)
 
-town_name <- "Baldwin"
+town_name <- "Windham"
 tick_data <- tick_disease
 
 fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 11000, data_list){
@@ -205,7 +205,15 @@ model{
 
   #### Process Model
   for(t in 2:n){
-    x[t] ~ dpois(x[t-1])#, pop[t]) #,tau_add)
+    
+     ### Generate discrete random walk
+    tmp[t] ~ dbern(0.5)
+    error[t] ~ dpois(yearly_error)
+    direction[t] <- 2*tmp[t] - 1 # Making Rademacher dist
+    step_direction[t] <- direction[t] * error[t]
+
+    z[t] ~ dpois(x[t-1])
+    x[t] <-  z[t] + step_direction[t]
   }
   
   #### Priors
@@ -234,7 +242,7 @@ j.model   <- jags.model (file = textConnection(RandomWalk),
                              n.chains = 3)
 
 jags.out   <- coda.samples (model = j.model,
-                            variable.names = c( "tau_add", "x", "false_negative"),
+                            variable.names = c( "step_direction", "x", "false_negative"),
                                 n.iter = n.iter)
 
 GBR <- gelman.plot(jags.out)
