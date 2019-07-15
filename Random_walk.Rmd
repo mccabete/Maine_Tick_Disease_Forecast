@@ -22,17 +22,17 @@ The null random walk model we used is a
 
 The full data model is what translates the observed CDC data `y[]` into the latent state `x[]`. The latent state is meant to represent a "true" number of lyme cases, with an understanding that the reported lyme cases are underreported. The data model aproximates the latent state based on the observed state. This means that crafting a data model requires knowing how/why cases are underreported. 
 
-
 Cases of disease are undereported for a variaety of interacting reasons, including access to medical care/ testing facilities, awareness of disease, cost of medical treatment, false negatives in testing, misdiagnosis etc.
 
-Having an error term that encoumpassed all those reasons for underreporting would be ideal, but there are very few papers that provide numerical estimates for any spcific one. Some papers have estimated error rates in tick-testing, and diagnosis rates (see below). 
+Having an error term that encoumpassed all those reasons for underreporting would be ideal, but there are very few papers that provide numerical estimates for all of the above reasons. Some papers have estimated error rates in blood-sample-testing, and diagnosis rates (see below). 
 
 We wanted to have a CDC-provided estimate of the error to put into the prior, but also anouther estimate to benchmark our modeled output against. Ideally, the prior would be set by a more general estimate of the error, and we could then benchmark against Maine-level estimates. 
 
-Currently, the plan is to make a prior based on the Hinckley et al paper, and have our model be predicting the number of people with lyme disease that were tested, but got a negative result. The two gate-keepers for tick disease reporting to the CDC are positive lab results, and identification of symptoms (rash/ clinicaly defined symotoms) and diagnosis by a medical profesional. Out data model will constrain false negatives from the tick lab results, but that will not constrain uderreporting assosiated with access to lab-testing, accesing the medical community, or underreporting within the medical community. We also don't deal with false positives within testing becuase the CDC criteria for reporting has a high level of certainty.
+Currently, the plan is to make a prior based on the Hinckley et al paper, and have our model be predicting the number of people with lyme disease that were tested, but got a negative result. The two gate-keepers for tick disease reporting to the CDC are positive lab results, and identification of symptoms (rash/ clinicaly defined symotoms) and diagnosis by a medical profesional. Out data model will constrain false negatives from the blood lab results, but that will not constrain uderreporting assosiated with access to lab-testing, accesing the medical community, or underreporting within the medical community. We also don't deal with false positives within testing becuase the CDC criteria for reporting has a high level of certainty.
 
 
-Hinckley et al paper reports a "True positive rate" of the number of ticks sent for testing. 
+Hinckley et al paper reports a "True positive rate" of the number of samples sent for testing, and an "observed" positive rate for two tests . I am not sure what type of assay is used in the labs that inform Maine incident reports, but two types are reported in the Hinckley et al: the Two-tiered whole cell test, and the EIA/IFA stand-alone or first tier test. They also report the proportion of the samples that were tested useing those two tests, so we will assume the same proportions (Table 3 of Hinckley et al).
+
 ```{r}
 # reprted "true positive" is 0.12 with range of 0.1 to 0.185. With rate of 0.12,  288 000 cases were reported ( range of 240000 - 444000. 
 
@@ -44,8 +44,20 @@ estBetaParams <- function(mu, var) {
 }
 
 mu_true_pos <- 0.12
-var_true_pos <- 0.03 # Something larger than 0.1 and 0.18, but still constrained by paper
-beta_of_true_tick_rate <- estBetaParams(0.12, 0.03)
+observed_pos_1 <- 0.0579 # Two Tier
+observed_pos_2 <- 0.1189 # EIA/ IFA Stand-alone or First Tier
+proportion_used_1 <- 297619/ (297619 + 287595)  # Reported number of tests for two-tierd / total 
+proportion_used_2 <- 287595/ (297619 + 287595) # Reported number of tests for two-tierd / total 
+
+weighted_obs_pos <- (0.0579 *proportion_used_1) + (0.1189*proportion_used_2)
+
+detection_rate_mu <- weighted_obs_pos / mu_true_pos
+detection_rate_min <-  weighted_obs_pos / 0.185
+detection_rate_max <- weighted_obs_pos / 0.1
+
+var_true_pos <- 0.11 # Something larger than min and max, but still constrained by them. 
+
+beta_of_true_tick_rate <- estBetaParams(0.7323131, var_true_pos)
 
 ```
 
@@ -132,7 +144,6 @@ for (i in seq_along(towns_to_run)){
 
 The negative binomial returns the number of failures that occur before a certain number of successes, where the probability of success is 0.12. We are looking at observations which we are presuming are the result of a binomial process where the number of trials is the true number of lyme disease incidents. To get back that number of trials from observations, we need to get the number of failures (the result of a random draw from the negative binomial) and add that to the number of sucesses (The observations). 
 
-Note on the use of negative binomial: Here we use a phraseing of the negative binomial representing ["number of trials where k sucesses is known"](https://en.wikipedia.org/wiki/Negative_binomial_distribution). 
 
 ## A function that runs the model
 ```{r}
@@ -277,6 +288,7 @@ if(is.na(burnin)){
 *National Estimates of Errors*
 
 Some national error estimates include [this paper](https://academic.oup.com/cid/article/59/5/676/2895755) by Hinckley et al, which estimates the "true" number of infections in 2008 based on the number of specimines sent into labs, and correcting for false positives and false negatives. It does not estimate the number of incidences where the tick itself was not sent in for testing, but says this could add to the number. 
+
 [This CDC summary](https://www.cdc.gov/mmwr/volumes/66/ss/ss6622a1.htm?s_cid=ss6622a1_w) of the 2008-2015 data notes that tick disease rates are underreported in high-incidence areas but possibly over-reported in low-incidence areas.
   Starting in 2008, the CDC explicitly notes the difference between confirmed cases and probable cases. This difference could be used to estimate some of the error, but is also likely an underestimate because the definition of "probable case" still involves some positive lab results/ medical diagnosis. 
 
