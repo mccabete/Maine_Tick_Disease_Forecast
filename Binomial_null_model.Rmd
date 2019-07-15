@@ -1,10 +1,3 @@
----
-title: "Random_walk"
-author: "Tempest McCabe"
-date: "7/2/2019"
-output: html_document
----
-
 ```{r}
 library(rjags)
 library(coda)
@@ -12,9 +5,9 @@ library(ggplot2)
 library(dplyr)
 ```
 
-## The Random-walk null model
+## A Binomial null model
 
-The null random walk model we used is a 
+This Binomial null model models having lyme as a binomial process twice. The first time is a model of detection probability, which says the the number of observed cases is a function of some probability of detecting lyme in a patient, and the "true" number of lyme cases is the number of trials fed into the binomial disitrbution. The second time is modeling the incidence of lyme in a town as a fucntion of population of that town. We say that each per-year-person has some probability of contracting lyme disease. 
 
 ## Developing priors
 
@@ -103,10 +96,9 @@ for (i in seq_along(towns_in_rest_of_maine)){
 ## Take mean of that distribution
 hist(variations)
 mean_year_year_variability <- mean(variations) ## What to plug into the poission 
-year_to_year_variability <- var(variations)
-s <- mean_year_year_variability/ year_to_year_variability
 
 ```
+
 
 # A prior on x_ic
 
@@ -145,10 +137,8 @@ for (i in seq_along(towns_to_run)){
 town_x_ic$x_ic <- town_x_ic$x_ic 
 ```
 
-## A function of the random walk model
-
 ```{r}
-fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 91000, data_list, init_detection_rate,init_ic, init_data ){
+fit_binomial_null <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 91000, data_list, init_detection_rate,init_ic ){
   
   tick_data <- dplyr::arrange(tick_data, by = tick_data$Year) # Make sure to be going in order of year
    
@@ -156,7 +146,7 @@ fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter 
   less_than_six_indices <- which(tick_data$Number == "<6" )
   numeric_indices <- which(tick_data$Number != "<6")
   
-  data_list$n <- length(tick_data$Year) + 1
+  data_list$n <- length(tick_data$Year) 
   data_list$numeric_indices <- numeric_indices
   data_list$less_than_six_indices <- less_than_six_indices
   data_list$y <- tick_data$Number
@@ -181,21 +171,16 @@ model{
   }
 
   #### Process Model
-  for(t in 2:n){
-    tmp[t] ~ dbern(step_probability)
-    error[t] ~ dpois(yearly_error)
-    direction[t] <- 2*tmp[t] - 1 # Making Rademacher dist
-    step_direction[t] <- direction[t] * error[t]
-
-    z[t] ~ dpois(x[t-1])
-    q[t] <- z[t] + step_direction[t]
-    x[t] <- max(0, q[t])
+   for (i in 2:n){
+   x[i] ~ dbinom(probability, pop[i])
   }
+
+  ## Prior
+  probability ~ dbeta(1,1) #uniform probability
   
   #### Priors
   x[1] ~ dpois(x_ic) 
-  detection_rate ~ dbeta(a_obs,b_obs)
- step_probability ~ dbeta(1,1)
+  detection_rate ~ dbeta(a_obs,b_obs) 
 
 }
 "
@@ -209,26 +194,15 @@ model{
   }
 
   #### Process Model
-  for(t in 2:n){
-    
-     ### Generate discrete random walk
-    tmp[t] ~ dbern(step_probability)
-    error[t] ~ dpois(yearly_error)
-    direction[t] <- 2*tmp[t] - 1 # Making Rademacher dist
-    step_direction[t] <- direction[t] * error[t]
-    
-    #k[t] ~ dnorm(x[t-1], tau_add)
-    z[t] ~ dpois(x[t-1])
-    q[t] <- z[t] + step_direction[t]
-    x[t] <- max(0, q[t])
+   for (i in 2:n){
+   x[i] ~ dbinom(probability, pop[i])
   }
+
   
   #### Priors
   x[1] ~ dpois(x_ic)
   detection_rate ~ dbeta(a_obs, b_obs)
-  tau_add ~ dgamma(1, 1)
-  step_probability ~ dbeta(1,1)
-
+  probability ~ dbeta(1,1) #uniform probability
 }
 "
   }
@@ -240,7 +214,7 @@ model{
 nchain = 3
 init <- list()
 for(i in 1:nchain){
-  init[[i]] <- list( detection_rate <- init_detection_rate , x_ic <- init_ic, z <- init_data) # Maybe check  these 
+  init[[i]] <- list( detection_rate <- init_detection_rate , x_ic <- init_ic) # Maybe check  these 
 }
 
 
@@ -250,7 +224,7 @@ j.model   <- jags.model (file = textConnection(RandomWalk),
                              n.chains = 3)
 
 jags.out   <- coda.samples (model = j.model,
-                            variable.names = c( "x", "detection_rate", "step_probability"),
+                            variable.names = c( "x", "detection_rate", "probability"),
                                 n.iter = n.iter)
 
 GBR <- gelman.plot(jags.out)
@@ -267,7 +241,7 @@ if(is.na(burnin)){
 }
   date_stamp <- Sys.time()
   date_stamp <- format(date_stamp, "%Y%m%d")
-  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "random_walk",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
+  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "binomial_null",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
   print(did_it_converge)
   print(effectiveSize(jags.burn))
   #save(jags.burn, file = file_name )
@@ -283,18 +257,15 @@ note: Frye_Island is failing to converge, becuase a special case of data. Long_I
 
 for (i in seq_along(towns_to_run)){
   # For binom error
-  town_name <- towns_to_run[i]
+  town_name <-"Freeport"
   
-  towns_failed_to_run <- c("Harpswell",  "Brunswick", "Pownal", "Yarmouth", "Standish", "Portland", "Frye_Island") 
+ towns_failed_to_run <- c( "Frye_Island") 
   if( town_name %in% towns_failed_to_run){
    next
   }
   
-  towns_already_run <- c( "Cumberland", "Chebeague_Island", "Falmouth", "Long_Island", "Scarborough", "Baldwin", "Gorham")
-  if( town_name %in% towns_already_run){
-    next
-  }
-  
+
+
 tick_data <- tick_disease
 
   tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
@@ -303,44 +274,11 @@ tick_data <- tick_disease
   tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year) # Make sure model is fitting through time
 tick_data <- tick_disease_tmp
 
-data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 7, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , y = tick_disease_tmp$Number,  x_ic = town_x_ic$x_ic[town_x_ic$Location == town_name] ,yearly_error = mean_year_year_variability)
+data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 7, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , y = tick_disease_tmp$Number,  x_ic = town_x_ic$x_ic[town_x_ic$Location == town_name] , pop = as.numeric(tick_disease_tmp$Population))
 
-init_data <- as.numeric(tick_data$Number) + 2
 print(town_name)
-freeport <- fit_random_walk(tick_data, has_suppressed = TRUE, town_name, n.iter = 191000, data_list, init_detection_rate = 0.9, init_ic = as.numeric(tick_data$Number[1]), init_data )
+output <- fit_binomial_null(tick_data, has_suppressed = TRUE, town_name, n.iter = 191000, data_list, init_detection_rate = 0.2, init_ic = as.numeric(tick_data$Number[1]) )
   
 }
 
 ```
-
-towns_failed_to_run <- c("Harpswell",  "Brunswick", "Pownal", "Yarmouth", "Standish", "Portland", "Frye_Island", "South_Portland", "Cape_Elizabeth", "Harrison", "Gray", "North_Yarmouth", "Casco", "Raymond", "Naples", "Windham", "New_Gloucester") 
-  if( town_name %in% towns_failed_to_run){
-   next
-  }
-  
-  towns_already_run <- c("Freeport", "Cumberland", "Chebeague_Island", "Falmouth", "Long_Island", "Scarborough", "Baldwin", "Gorham")
-  if( town_name %in% towns_already_run){
-    next
-  }
-# Lit review for error rates in Tick reporting
-
-*National Estimates of Errors*
-
-Some national error estimates include [this paper](https://academic.oup.com/cid/article/59/5/676/2895755) by Hinckley et al, which estimates the "true" number of infections in 2008 based on the number of specimines sent into labs, and correcting for false positives and false negatives. It does not estimate the number of incidences where the tick itself was not sent in for testing, but says this could add to the number. 
-
-[This CDC summary](https://www.cdc.gov/mmwr/volumes/66/ss/ss6622a1.htm?s_cid=ss6622a1_w) of the 2008-2015 data notes that tick disease rates are underreported in high-incidence areas but possibly over-reported in low-incidence areas.
-  Starting in 2008, the CDC explicitly notes the difference between confirmed cases and probable cases. This difference could be used to estimate some of the error, but is also likely an underestimate because the definition of "probable case" still involves some positive lab results/ medical diagnosis. 
-
-[This estimate](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4550147/) of 2005-2010 national incidence rate useing health insurence claims also argues for large numbers of underreporting. 
-
-[This review](https://www-sciencedirect-com.ezproxy.bu.edu/science/article/pii/S0891552015000240?via%3Dihub) as well as being a thourough general review of lyme in the united states, summerizes some of the liturature attemting to estimate the amount of underreporting in lyme disease, putting it aproximatly 3-12 fold differences. The studies were state/ town specific but the techniqes used were: 
- - In Westchestesr New York a "determinisitc model with plausible ranges" [was used](https://academic.oup.com/aje/article/148/10/1018/135572) to estimate "true" incidence levels. 
- - Connecticut Physicians [were surveyed](https://europepmc.org/abstract/med/10186700).
- - Maryland Physicians [were surveyed](https://doi.org/10.1093/infdis/173.5.1260)
- -  Medical records in Wisconsin [were reviewd](https://academic.oup.com/aje/article/155/12/1120/123221)
- 
-*Maine Estimates of errors*
-
-[There are 2011-2016 estimates of prevelance](https://data.mainepublichealth.gov/tracking/metadata-lyme-prevalence) by town in Maine. Because Prevelance = Incidence x Average duration of disease, we may be able to compare our estimates to prevelance data as measured by the survey. However, prevelance is estimated by the question "Have you ever been told by a doctor, nurse, or other health professional that you have Lyme disease?”. This question does not capture populations that would not have intereacted with medical profesionals. However, it could be a cool benchmark on the state/ on the error assosiated with individuals who do intereact with medical profesionals, but who's disease does not meet the criteria of either probable or confirmed. 
-
- 
