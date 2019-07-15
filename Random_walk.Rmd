@@ -57,7 +57,7 @@ detection_rate_max <- weighted_obs_pos / 0.1
 
 var_true_pos <- 0.11 # Something larger than min and max, but still constrained by them. 
 
-beta_of_true_tick_rate <- estBetaParams(0.7323131, var_true_pos)
+beta_of_true_tick_rate <- estBetaParams(detection_rate_mu, var_true_pos)
 
 ```
 
@@ -108,8 +108,7 @@ mean_year_year_variability <- mean(variations) ## What to plug into the poission
 
 # A prior on x_ic
 
-This parameter represents the latent state of the system in 2007. Because 2007 was a year that the nature of case-definitions changed, the `y[2007]` means something different than the `y[2008]`. To put a somewhat informed prior on x_ic, I am plugging in 2007 data multiplied by 1.2 . This is about the amount two scientists familiar with the data said difference between the data was. 
-
+This parameter represents the latent state of the system in 2008. Using the negative binomial to aproximate the latent varible. The negative binomial returns the number of failures that occur before a certain number of successes, where the probability of success is detection_rate_mu. We are looking at observations which we are presuming are the result of a binomial process where the number of trials is the true number of lyme disease incidents. To get back that number of trials from observations, we need to get the number of failures (the result of a random draw from the negative binomial) and add that to the number of sucesses (The observations). 
 ```{r}
 ## Declare matrix to store x_ic values per town
 town_x_ic <- matrix(nrow = length(towns_to_run), ncol = 2)
@@ -123,41 +122,42 @@ for (i in seq_along(towns_to_run)){
   tick_data <- tick_disease
 
   tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
-  tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year == 2007)
+  tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year == 2008)
   
   is_numeric <- try(as.numeric(tick_disease_tmp$Number))
   
   if(!is.na(is_numeric)){
-    obs_ticks <- is_numeric * 1.2 # Correct for difference in sampling. 
+    obs_ticks <- is_numeric  # Correct for difference in sampling. 
   }else{
     obs_ticks <- rpois(1, 1)
     if(obs_ticks > 5){ obs_ticks <- 5} # We know not larger than 5
-    obs_ticks <- obs_ticks * 1.2
   }
-  if(obs_ticks < 1){ obs_ticks <- 0.0001} # nbinom not accept 0's. Assign small non-zero number
+  if(obs_ticks < 1){ obs_ticks <- 0.1} # nbinom not accept 0's. Assign small non-zero number
   town_x_ic$Location[i] <- town_name
-  town_x_ic$x_ic[i] <- (rnbinom(1, obs_ticks, 0.12) +obs_ticks) # add number of successes to number of failure to get total number of trials
+  town_x_ic$x_ic[i] <- (rnbinom(1, obs_ticks, detection_rate_mu) +obs_ticks) # add number of successes to number of failure to get total number of trials
+  town_x_ic$x_ic <- floor(town_x_ic$x_ic) # Take care of 0.1 case
 }
 
-
+town_x_ic$x_ic <- town_x_ic$x_ic 
 ```
 
-The negative binomial returns the number of failures that occur before a certain number of successes, where the probability of success is 0.12. We are looking at observations which we are presuming are the result of a binomial process where the number of trials is the true number of lyme disease incidents. To get back that number of trials from observations, we need to get the number of failures (the result of a random draw from the negative binomial) and add that to the number of sucesses (The observations). 
+
 
 
 ## A function that runs the model
 ```{r}
 
 # For binom error
-data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 9, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , a_add = 2, r_add = 0.5,  y = tick_disease_tmp$Number,  x_ic = 87 , tau_ic = 1,yearly_error = 2)
+data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 7, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , y = tick_disease_tmp$Number,  x_ic = town_x_ic$x_ic[town_x_ic$Location == town_name] ,yearly_error = mean_year_year_variability)
 
 town_name <- "Baldwin"
 tick_data <- tick_disease
 
   tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
-  tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year >= 2008)
+  tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year > 2008) # Used 2008 as prior on system
   tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year < 2016) # Hold out three years for validation. 
   tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year) # Make sure model is fitting through time
+tick_data <- tick_disease_tmp
 
 fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 91000, data_list){
   
@@ -167,7 +167,7 @@ fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter 
   less_than_six_indices <- which(tick_data$Number == "<6" )
   numeric_indices <- which(tick_data$Number != "<6")
   
-  data_list$n <- 1 + length(tick_data$Year)
+  data_list$n <- length(tick_data$Year) + 1
   data_list$numeric_indices <- numeric_indices
   data_list$less_than_six_indices <- less_than_six_indices
   data_list$y <- tick_data$Number
@@ -184,11 +184,11 @@ model{
   #### Data Model
   for(t in numeric_indices){
    
-   y[t] ~ dbinom(true_positive, x[t])
+   y[t] ~ dbinom(detection_rate, x[t])
  }
  
   for(t in less_than_six_indices){   ## Maybe consider a population cutoff, and allow zeros
-   y[t] ~ dbinom(true_positive, x[t]) T(1,5)
+   y[t] ~ dbinom(detection_rate, x[t]) T(1,5)
   }
 
   #### Process Model
@@ -199,12 +199,13 @@ model{
     step_direction[t] <- direction[t] * error[t]
 
     z[t] ~ dpois(x[t-1])
-    x[t] <-  z[t] + step_direction[t]
+    q[t] <- z[t] + step_direction[t]
+    x[t] <- max(0, q[t])
   }
   
   #### Priors
   x[1] ~ dpois(x_ic) 
-  true_positive ~ dbeta(a_obs,b_obs) 
+  detection_rate ~ dbeta(a_obs,b_obs) 
 
 }
 "
@@ -214,7 +215,7 @@ model{
   
   #### Data Model
   for(t in numeric_indices){
-   y[t] ~ dbinom(true_positive, x[t])
+   y[t] ~ dbinom(detection_rate, x[t])
   }
 
   #### Process Model
@@ -227,12 +228,13 @@ model{
     step_direction[t] <- direction[t] * error[t]
 
     z[t] ~ dpois(x[t-1])
-    x[t] <-  z[t] + step_direction[t]
+    q[t] <- z[t] + step_direction[t]
+    x[t] <- max(0, q[t])
   }
   
   #### Priors
   x[1] ~ dpois(x_ic)
-  true_positive ~ dbeta(a_obs, b_obs)
+  detection_rate ~ dbeta(a_obs, b_obs)
 
 }
 "
@@ -245,7 +247,7 @@ model{
 nchain = 3
 init <- list()
 for(i in 1:nchain){
-  init[[i]] <- list( tau_obs <- 4, x_ic <- 10) # Maybe check  these 
+  init[[i]] <- list( detection_rate <- 0.2 , x_ic <- 5) # Maybe check  these 
 }
 
 
@@ -255,7 +257,7 @@ j.model   <- jags.model (file = textConnection(RandomWalk),
                              n.chains = 3)
 
 jags.out   <- coda.samples (model = j.model,
-                            variable.names = c( "x", "true_positive"),
+                            variable.names = c( "x", "detection_rate"),
                                 n.iter = n.iter)
 
 GBR <- gelman.plot(jags.out)
