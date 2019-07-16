@@ -1,0 +1,25 @@
+---
+title: "Export_binomial_null"
+author: "Tempest McCabe"
+date: "7/16/2019"
+output: html_document
+---
+
+## Read in data
+```{r}
+
+```
+
+
+## get mean and SD for all values
+```{r}
+
+```
+
+
+## Validate for new years and towns
+```{r}
+
+
+
+```
