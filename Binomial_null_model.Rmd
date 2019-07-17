@@ -259,7 +259,7 @@ note: Frye_Island is failing to converge, becuase a special case of data. Long_I
 ```{r}
 # Special children, failed to converge for maybe structural reasons: c("Pownal", "Harrison", "Baldwin")
 ## Converged: "Portland",  "Standish", "Cape_Elizabeth", "Scarborough", "Gorham", "New_Gloucester"
-## Still more : "Chebeague_Island", "Long_Island"
+## Still more : "Chebeague_Island", "Long_Island" 
 towns_to_run <- c("Chebeague_Island", "Long_Island") # no Frye_Island because NA in data
 
 
