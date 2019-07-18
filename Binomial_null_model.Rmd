@@ -107,14 +107,14 @@ This parameter represents the latent state of the system in 2008. Using the nega
 
 ```{r}
 ## Declare matrix to store x_ic values per town
-town_x_ic <- matrix(nrow = length(towns_to_run), ncol = 2)
+town_x_ic <- matrix(nrow = length(towns_in_cumberland), ncol = 2)
 town_x_ic <- as.data.frame(town_x_ic)
 names(town_x_ic) <- c("Location", "x_ic")
 
 
 ## Cycle through towns and do a random pull from negative binomial 
-for (i in seq_along(towns_to_run)){
-  town_name <- towns_to_run[i]
+for (i in seq_along(towns_in_cumberland)){
+  town_name <- towns_in_cumberland[i]
   tick_data <- tick_disease
 
   tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
@@ -134,7 +134,9 @@ for (i in seq_along(towns_to_run)){
   town_x_ic$x_ic <- floor(town_x_ic$x_ic) # Take care of 0.1 case
 }
 
-town_x_ic$x_ic <- town_x_ic$x_ic 
+town_x_ic$x_ic[town_x_ic$x_ic == 0 ] <- 1 # because we never expect zero for latent state
+town_x_ic <- na.omit(town_x_ic)
+
 ```
 
 ```{r}
@@ -260,9 +262,11 @@ note: Frye_Island is failing to converge, becuase a special case of data. Long_I
 # Special children, failed to converge for maybe structural reasons: c("Pownal", "Harrison", "Baldwin")
 ## Converged: "Portland",  "Standish", "Cape_Elizabeth", "Scarborough", "Gorham", "New_Gloucester"
 ## Still more : "Chebeague_Island", "Long_Island" 
-towns_to_run <- c("Chebeague_Island", "Long_Island") # no Frye_Island because NA in data
-
-
+#towns_to_run <- c("Chebeague_Island", "Long_Island") # no Frye_Island because NA in data
+# Sebago only has two years? 
+#"Baldwin" run
+# Need to run with larger size "Harrison", "Bridgton"
+towns_to_run <- c("Westbrook", "Pownal" ) #Pownal might need longer to converge
 
 
 
@@ -283,7 +287,7 @@ tick_data <- tick_disease_tmp
 data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 7, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , y = tick_disease_tmp$Number,  x_ic = town_x_ic$x_ic[town_x_ic$Location == town_name] , pop = as.numeric(tick_disease_tmp$Population))
 
 print(town_name)
-output <- fit_binomial_null(tick_data, has_suppressed = TRUE, town_name, n.iter = 11051000, data_list, init_detection_rate = 0.9, init_ic = as.numeric(tick_data$Number[1]) )
+output <- fit_binomial_null(tick_data, has_suppressed = TRUE, town_name, n.iter = 1051000, data_list, init_detection_rate = 0.9, init_ic = as.numeric(tick_data$Number[1]) )
   
 }
 
