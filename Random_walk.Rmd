@@ -155,7 +155,7 @@ fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter 
   
   less_than_six_indices <- which(tick_data$Number == "<6" )
   numeric_indices <- which(tick_data$Number != "<6")
-  
+  # data_list <- list()
   data_list$n <- length(tick_data$Year) + 1
   data_list$numeric_indices <- numeric_indices
   data_list$less_than_six_indices <- less_than_six_indices
@@ -232,7 +232,7 @@ model{
 
 }
 "
-  }
+}
 
 ## loading in priors
 #data <- data_list
@@ -268,7 +268,7 @@ if(is.na(burnin)){
 }
   date_stamp <- Sys.time()
   date_stamp <- format(date_stamp, "%Y%m%d")
-  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "random_walk",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
+  file_name <- paste("Jags_output/", date_stamp, ".", "random_walk",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
   print(did_it_converge)
   print(effectiveSize(jags.burn))
   #save(jags.burn, file = file_name )
