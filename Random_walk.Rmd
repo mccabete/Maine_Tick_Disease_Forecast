@@ -217,18 +217,19 @@ model{
     #direction[t] <- 2*tmp[t] - 1 # Making Rademacher dist
     #step_direction[t] <- direction[t] * error[t]
     
-    a[t] <- x[t-1]/s
-    k[t] ~ dgamma(a[t], s)
-    z[t] ~ dpois(k[t]) ## Give dpois a negative binomial dist
-    q[t] <- z[t] #+ step_direction[t]
-    x[t] <- max(0, q[t])
+    
+    q[t] ~ dnorm(x[t-1], tau_add)
+    z[t] ~ dnbinom(q[t], 0.5) # The expected value should be q[t] 
+    x[t] <- z[t] #+ step_direction[t]
+    
   }
   
   #### Priors
-  x[1] ~ dpois(x_ic)
+  x[1] ~ dnbinom(x_ic, s) 
   detection_rate ~ dbeta(a_obs, b_obs)
-  s ~ dgamma(1, 2)
-  step_probability ~ dbeta(1,1)
+  s ~ dbeta(1, 0.5)
+  #step_probability ~ dbeta(1,1)
+  tau_add  <- 0.5#~ dgamma(1, 7)
 
 }
 "
@@ -277,6 +278,10 @@ if(is.na(burnin)){
 
 ```
 
+```{r}
+x <- rgamma(1, 1, 2)
+hist(rgamma(10/x, x))
+```
 
 ## Looping over every town in cumberland 
 
@@ -287,7 +292,7 @@ for (i in seq_along(towns_to_run)){
   # For binom error
   town_name <- towns_to_run[i]
   
-  towns_failed_to_run <- c("South_Portland", "Harpswell",  "Brunswick", "Pownal", "Yarmouth", "Standish", "Portland", "Frye_Island") 
+  towns_failed_to_run <- c("Harrison", "South_Portland", "Harpswell",  "Brunswick", "Pownal", "Yarmouth", "Standish", "Portland", "Frye_Island") 
   if( town_name %in% towns_failed_to_run){
    next
   }
@@ -309,9 +314,9 @@ val_2008 <- as.numeric(tick_disease_tmp$Number[tick_disease_tmp$Year == 2008])
 
 data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 7, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , y = tick_data$Number,  x_ic = town_x_ic$x_ic[town_x_ic$Location == town_name] ,yearly_error = mean_year_year_variability)
 
-init_data <- as.numeric(tick_data$Number) + 5
+init_data <- as.numeric(tick_data$Number)
 print(town_name)
-freeport <- fit_random_walk(tick_data, has_suppressed = TRUE, town_name, n.iter = 1000, data_list, init_detection_rate = 0.9999, init_ic = val_2008 + 5, init_data )
+freeport <- fit_random_walk(tick_data, has_suppressed = TRUE, town_name, n.iter = 1000, data_list, init_detection_rate = 0.9999999, init_ic = val_2008 + 2, init_data )
   
 }
 
