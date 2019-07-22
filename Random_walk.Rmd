@@ -84,11 +84,11 @@ for (i in seq_along(towns_in_rest_of_maine)){
   print(town_name)
   for(j in 1:(length(tick_disease_tmp$Year-1))){
     
-    is_numeric_j <- try(as.numeric(tick_disease_tmp$Number[j]))
-    is_numeric_j_next <- try(as.numeric(tick_disease_tmp$Number[j + 1]))
+    is_numeric_j <- try(as.numeric(tick_disease_tmp$Rate[j]))
+    is_numeric_j_next <- try(as.numeric(tick_disease_tmp$Rate[j + 1]))
     
     if(!is.na(is_numeric_j) && !is.na(is_numeric_j_next)){
-      diff <- as.numeric(tick_disease_tmp$Number[j]) - as.numeric(tick_disease_tmp$Number[j + 1])
+      diff <- as.numeric(tick_disease_tmp$Rate[j]) - as.numeric(tick_disease_tmp$Rate[j + 1])
       #print(diff)
     }else{
       #print(".....Skipping.....")
@@ -110,42 +110,8 @@ b_gam <- mean_year_year_variability/ year_to_year_variability
 
 ```
 
-# A prior on x_ic
-
-This parameter represents the latent state of the system in 2008. Using the negative binomial to aproximate the latent varible. The negative binomial returns the number of failures that occur before a certain number of successes, where the probability of success is detection_rate_mu. We are looking at observations which we are presuming are the result of a binomial process where the number of trials is the true number of lyme disease incidents. To get back that number of trials from observations, we need to get the number of failures (the result of a random draw from the negative binomial) and add that to the number of sucesses (The observations). 
 
 
-```{r}
-## Declare matrix to store x_ic values per town
-town_x_ic <- matrix(nrow = length(towns_to_run), ncol = 2)
-town_x_ic <- as.data.frame(town_x_ic)
-names(town_x_ic) <- c("Location", "x_ic")
-
-
-## Cycle through towns and do a random pull from negative binomial 
-for (i in seq_along(towns_to_run)){
-  town_name <- towns_to_run[i]
-  tick_data <- tick_disease
-
-  tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
-  tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year == 2008)
-  
-  is_numeric <- try(as.numeric(tick_disease_tmp$Number))
-  
-  if(!is.na(is_numeric)){
-    obs_ticks <- is_numeric  # Correct for difference in sampling. 
-  }else{
-    obs_ticks <- rpois(1, 1)
-    if(obs_ticks > 5){ obs_ticks <- 5} # We know not larger than 5
-  }
-  if(obs_ticks < 1){ obs_ticks <- 0.1} # nbinom not accept 0's. Assign small non-zero number
-  town_x_ic$Location[i] <- town_name
-  town_x_ic$x_ic[i] <- (rnbinom(1, obs_ticks, detection_rate_mu) +obs_ticks) # add number of successes to number of failure to get total number of trials
-  town_x_ic$x_ic <- floor(town_x_ic$x_ic) # Take care of 0.1 case
-}
-
-town_x_ic$x_ic <- town_x_ic$x_ic 
-```
 
 ## A function of the random walk model
 
@@ -155,13 +121,17 @@ fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter 
   tick_data <- dplyr::arrange(tick_data, by = tick_data$Year) # Make sure to be going in order of year
    
   
-  less_than_six_indices <- which(tick_data$Number == "<6" )
-  numeric_indices <- which(tick_data$Number != "<6")
+  less_than_six_indices <- which(tick_data$Rate == "*" )
+  numeric_indices <- which(tick_data$Rate != "*")
+  
+  #if(1 %in% less_than_six_indices){
+  #  less_than_six_indices<- less_than_six_indices[less_than_six_indices != 1]
+  #}
   
   data_list$n <- length(tick_data$Year)
   data_list$numeric_indices <- numeric_indices
   data_list$less_than_six_indices <- less_than_six_indices
-  data_list$y <- tick_data$Number
+  data_list$y <- tick_data$Rate
   
   ## Check if has suppressed data. If yes, provide flow control
   if (rlang::is_empty(less_than_six_indices)){
@@ -173,25 +143,34 @@ fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter 
 model{
   
   #### Data Model
+   S <- 1/tau
   for(t in numeric_indices){
-   y[t] ~ dbin(detection_rate, x[t])
-   w[t] <- x[t] / pop[t] * 100000 ## Change to rate
- }
- 
+   expected_value[t] <- x[t]*detection_rate_mu #Maybe issues with 0 obs
+   a[t] <- (expected_value[t]^2)/S
+   b[t] <- expected_value[t]/S
+   y[t] ~ dgamma(a[t],b[t])
+  }
+
   for(t in less_than_six_indices){  ## Maybe consider a population cutoff, and allow zeros
-   y[t] ~ dbin(detection_rate, x[t]) T(1,5)
-   w[t] <- (x[t] / pop[t]) * 100000  ## Change to rate 
+  expected_value[t] <- x[t]*detection_rate_mu #Maybe issues with 0 obs
+   lower_bound[t] <- (1/pop[t])*100000
+   upper_bound[t] <- (5/pop[t])*100000
+   a[t] <- (expected_value[t]^2)/S
+   b[t] <- expected_value[t]/S
+   y[t] ~ dgamma(a[t],b[t]) T(lower_bound[t], upper_bound[t])
   }
 
   #### Process Model
   for(t in 2:n){
-  w[t] ~ dnorm(w[t-1],  tau_proc)
+  z[t] ~ dnorm(x[t-1],  tau_proc)
+  x[t] <- max(z[t], 0) # prevent from going negative
   }
   
   #### Priors
-  x[1] ~ dpois(x_ic) 
-  detection_rate ~ dbeta(a_obs,b_obs)
+  x[1] ~ dgamma(x_ic, 1)  #can't be negative if zero
+  #detection_rate ~ dbeta(a_obs,b_obs)
   tau_proc ~ dgamma(a_gam, b_gam)
+  tau ~ dgamma(1,1) # on S
  
 
 }
@@ -200,24 +179,26 @@ model{
         RandomWalk = "
 model{
   
- #### Data Model
-
-  w[1] <- (x[1] / pop[1]) * 100000 # Initial rate
-
-  for(t in 2:n){
-   y[t] ~ dbin(detection_rate, x[t])
-   w[t] <- (x[t] / pop[t]) * 100000 ## Change to rate
+  #### Data Model
+   S <- 1/tau
+  for(t in numeric_indices){
+   expected_value[t] <- x[t] * detection_rate_mu #Maybe issues with 0 obs
+   a[t] <- (expected_value[t]^2)/S
+   b[t] <- expected_value[t]/S
+   y[t] ~ dgamma(a[t],b[t])
   }
 
   #### Process Model
   for(t in 2:n){
-  w[t] ~ dnorm(w[t-1],  tau_proc)
+  z[t] ~ dnorm(x[t-1],  tau_proc)
+  x[t] <- max(z[t], 0) # prevent from going negative
   }
   
   #### Priors
-  x[1] ~ dpois(x_ic)
-  detection_rate ~ dbeta(a_obs,b_obs)
+  x[1] ~ dgamma(x_ic, 1)  #can't be negative if zero
+  #detection_rate ~ dbeta(a_obs,b_obs)
   tau_proc ~ dgamma(a_gam, b_gam)
+  tau ~ dgamma(1,1) # on S
 
 }
 "
@@ -240,7 +221,7 @@ j.model   <- jags.model (file = textConnection(RandomWalk),
                              n.chains = 3)
 
 jags.out   <- coda.samples (model = j.model,
-                            variable.names = c( "x", "detection_rate"),
+                            variable.names = c( "x"),
                                 n.iter = n.iter)
 
 GBR <- gelman.plot(jags.out)
@@ -272,35 +253,58 @@ if(is.na(burnin)){
 note: Frye_Island is failing to converge, becuase a special case of data. Long_Island also failing to converge.  
 ```{r}
 
+towns_have_run <- c()
 for (i in seq_along(towns_to_run)){
-  # For binom error
-  town_name <- towns_to_run[i]
   
-  towns_failed_to_run <- c("South_Portland", "Harpswell",  "Brunswick", "Pownal", "Yarmouth", "Standish", "Portland", "Frye_Island") 
-  if( town_name %in% towns_failed_to_run){
-   next
-  }
+  #towns_failed_to_run <- c("Frye_Island", "Chebeague_Island", "Long_Island", "Harrison", "North_Yarmouth", "Baldwin") 
+  #if( town_name %in% towns_failed_to_run){
+  #next
+  #}
   
-  towns_already_run <- c( "Freeport", "Cumberland", "Chebeague_Island", "Falmouth", "Long_Island", "Scarborough", "Baldwin", "Gorham")
-  if( town_name %in% towns_already_run){
-    next
-  }
+  ## Failed due to "Slicer with infinite density": Harrison @ z[#]
+  ## Failed due to y[#] parent node errors "Chebeague_Island", "Long_Island", Baldwin
+  ## Failed due to y[2] but should work: North_Yarmouth
+  ## Failed becuase it always will: frye_island
   
+
 tick_disease_tmp <- tick_disease
 
   tick_disease_tmp <- tick_disease_tmp[(tick_disease_tmp$Location == town_name ),] 
   tick_data <- tick_disease_tmp
-  tick_data <- dplyr::filter(tick_data, tick_data$Year > 2008) # Used 2008 as prior on system
+  tick_data <- dplyr::filter(tick_data, tick_data$Year >= 2008) # Used 2008 as prior on system
   tick_data <- dplyr::filter(tick_data,tick_data$Year < 2016) # Hold out three years for validation. 
   tick_data <- dplyr::arrange(tick_data, by = tick_data$Year) # Make sure model is fitting through time
+  
+  ### Remove duplicate rows? ###
+  tick_data <- dplyr::distinct(tick_data)
+  tick_disease_tmp <- dplyr::distinct(tick_disease_tmp)
 
-val_2008 <- as.numeric(tick_disease_tmp$Number[tick_disease_tmp$Year == 2008])
+val_2008 <- as.numeric(tick_disease_tmp$Rate[tick_disease_tmp$Year == 2008])
+if(is.na(val_2008)){
+  val_2008 <- na.omit(mean( tick_data$Rate)) ## For inits
+  val_2008 <- as.numeric(val_2008)
+}
 
-data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 7, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , y = tick_data$Number,  x_ic = town_x_ic$x_ic[town_x_ic$Location == town_name] ,a_gam = a_gam, b_gam = b_gam, pop = as.numeric(tick_data$Population))
+x_ic_man <- as.numeric(tick_disease_tmp$Rate[tick_disease_tmp$Year == 2008])+ ((1-detection_rate_mu)*as.numeric(tick_disease_tmp$Rate[tick_disease_tmp$Year == 2008])) +1 # We never belive 0 tick rate
 
-init_data <- as.numeric(tick_data$Number) + 5
+lower_bound <- (1/as.numeric(tick_data$Population[1]))*100000
+upper_bound <- (5/as.numeric(tick_data$Population[1]))*100000
+mean_bound <- (lower_bound + upper_bound)/2
+
+if(is.na(x_ic_man)){
+  
+  x_ic_man <- mean_bound
+}
+
+data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 7, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , y = tick_data$Rate,  x_ic = x_ic_man ,a_gam = a_gam, b_gam = b_gam, pop = as.numeric(tick_data$Population), detection_rate_mu = detection_rate_mu)
+
+init_data <- tick_data$Rate
+init_data[init_data == "*"] <- rep(mean_bound, length(init_data[init_data == "*"]))
+init_data <- as.numeric(init_data) + 50
+
 print(town_name)
-freeport <- fit_random_walk(tick_data, has_suppressed = TRUE, town_name, n.iter = 1000, data_list, init_detection_rate = 0.9999, init_ic = val_2008 + 2, init_data )
+towns_have_run <- c(towns_have_run, town_name)
+freeport <- fit_random_walk(tick_data, has_suppressed = TRUE, town_name, n.iter = 10000, data_list, init_detection_rate = 0.9999, init_ic = val_2008 + 2, init_data )
   
 }
 
