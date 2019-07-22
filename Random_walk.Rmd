@@ -104,7 +104,9 @@ for (i in seq_along(towns_in_rest_of_maine)){
 hist(variations)
 mean_year_year_variability <- mean(variations) ## What to plug into the poission 
 year_to_year_variability <- var(variations)
-s <- mean_year_year_variability/ year_to_year_variability
+a_gam <- (mean_year_year_variability^2)/ year_to_year_variability
+b_gam <- mean_year_year_variability/ year_to_year_variability
+
 
 ```
 
@@ -156,7 +158,7 @@ fit_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter 
   less_than_six_indices <- which(tick_data$Number == "<6" )
   numeric_indices <- which(tick_data$Number != "<6")
   
-  data_list$n <- length(tick_data$Year) + 1
+  data_list$n <- length(tick_data$Year)
   data_list$numeric_indices <- numeric_indices
   data_list$less_than_six_indices <- less_than_six_indices
   data_list$y <- tick_data$Number
@@ -172,30 +174,25 @@ model{
   
   #### Data Model
   for(t in numeric_indices){
-   
    y[t] ~ dbin(detection_rate, x[t])
+   w[t] <- x[t] / pop[t] * 100000 ## Change to rate
  }
  
-  for(t in less_than_six_indices){   ## Maybe consider a population cutoff, and allow zeros
+  for(t in less_than_six_indices){  ## Maybe consider a population cutoff, and allow zeros
    y[t] ~ dbin(detection_rate, x[t]) T(1,5)
+   w[t] <- (x[t] / pop[t]) * 100000  ## Change to rate 
   }
 
   #### Process Model
   for(t in 2:n){
-    #tmp[t] ~ dbern(step_probability)
-    #error[t] ~ dpois(yearly_error)
-    #direction[t] <- 2*tmp[t] - 1 # Making Rademacher dist
-    #step_direction[t] <- direction[t] * error[t]
-
-    z[t] ~ dpois(x[t-1])
-    q[t] <- z[t] + step_direction[t]
-    x[t] <- max(0, q[t])
+  w[t] ~ dnorm(w[t-1],  tau_proc)
   }
   
   #### Priors
   x[1] ~ dpois(x_ic) 
   detection_rate ~ dbeta(a_obs,b_obs)
- step_probability ~ dbeta(1,1)
+  tau_proc ~ dgamma(a_gam, b_gam)
+ 
 
 }
 "
@@ -203,32 +200,24 @@ model{
         RandomWalk = "
 model{
   
-  #### Data Model
-  for(t in numeric_indices){
+ #### Data Model
+
+  w[1] <- (x[1] / pop[1]) * 100000 # Initial rate
+
+  for(t in 2:n){
    y[t] ~ dbin(detection_rate, x[t])
+   w[t] <- (x[t] / pop[t]) * 100000 ## Change to rate
   }
 
   #### Process Model
   for(t in 2:n){
-    
-     ### Generate discrete random walk
-    #tmp[t] ~ dbern(step_probability)
-    #error[t] ~ dpois(yearly_error)
-    #direction[t] <- 2*tmp[t] - 1 # Making Rademacher dist
-    #step_direction[t] <- direction[t] * error[t]
-    
-    a[t] <- x[t-1]/s
-    k[t] ~ dgamma(a[t], s)
-    z[t] ~ dpois(k[t]) ## Give dpois a negative binomial dist
-    q[t] <- z[t] #+ step_direction[t]
-    x[t] <- max(0, q[t])
+  w[t] ~ dnorm(w[t-1],  tau_proc)
   }
   
   #### Priors
   x[1] ~ dpois(x_ic)
-  detection_rate ~ dbeta(a_obs, b_obs)
-  s ~ dgamma(1, 2)
-  step_probability ~ dbeta(1,1)
+  detection_rate ~ dbeta(a_obs,b_obs)
+  tau_proc ~ dgamma(a_gam, b_gam)
 
 }
 "
@@ -251,7 +240,7 @@ j.model   <- jags.model (file = textConnection(RandomWalk),
                              n.chains = 3)
 
 jags.out   <- coda.samples (model = j.model,
-                            variable.names = c( "x", "detection_rate", "step_probability"),
+                            variable.names = c( "x", "detection_rate"),
                                 n.iter = n.iter)
 
 GBR <- gelman.plot(jags.out)
@@ -307,11 +296,11 @@ tick_disease_tmp <- tick_disease
 
 val_2008 <- as.numeric(tick_disease_tmp$Number[tick_disease_tmp$Year == 2008])
 
-data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 7, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , y = tick_data$Number,  x_ic = town_x_ic$x_ic[town_x_ic$Location == town_name] ,yearly_error = mean_year_year_variability)
+data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 7, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , y = tick_data$Number,  x_ic = town_x_ic$x_ic[town_x_ic$Location == town_name] ,a_gam = a_gam, b_gam = b_gam, pop = as.numeric(tick_data$Population))
 
 init_data <- as.numeric(tick_data$Number) + 5
 print(town_name)
-freeport <- fit_random_walk(tick_data, has_suppressed = TRUE, town_name, n.iter = 1000, data_list, init_detection_rate = 0.9999, init_ic = val_2008 + 5, init_data )
+freeport <- fit_random_walk(tick_data, has_suppressed = TRUE, town_name, n.iter = 1000, data_list, init_detection_rate = 0.9999, init_ic = val_2008 + 2, init_data )
   
 }
 
