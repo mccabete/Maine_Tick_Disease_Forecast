@@ -12,12 +12,15 @@
 ###
 ### "Terra_LST.xlsx" and "aqua_LST.xlsx"  have has missing values added na.rm = TRUE 
 
-library(xlsx)
-library(lubridate)
-library(tidyverse)
+library(xlsx, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
+library(lubridate, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
+library(tidyverse, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
+library(tidyr, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
 
-aggrigate_data <- function(met.file, town){
+aggrigate_data <- function(full_path, met.file, town){
  
+  time_series <- "/data_raw/Final_Time_Series"
+  time_series <- paste(full_path, time_series, sep = "")
   files <- list.files(file.path(time_series, town))
   if(stringr::str_detect(files[1], "xlsx")){
     file.name <- paste(file.path(time_series, town, met.file), ".xlsx", sep = "")
@@ -34,8 +37,8 @@ aggrigate_data <- function(met.file, town){
   data <- separate(data, date, c("year", "month", "day"), sep = "-")
   data$val <- as.numeric(data$val)
   
-  ## hold out years 2016-2019 for validation
-  year.fit <- as.character(2008:2015)
+  
+  year.fit <- as.character(2008:2018)
   
   ## convert aqua- and terra-modis land surface temperature to deg. C
   if(met.file %in% c("Aqua_LST", "Terra_LST")){

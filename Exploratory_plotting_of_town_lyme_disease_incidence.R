@@ -1,7 +1,12 @@
 
 
 ### Reading in tick data
-tick_disease_big <- read.csv("town_level_data_lyme.csv", header = TRUE, stringsAsFactors = FALSE)
+tick_disease_big <- read.csv("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/town_level_data_lyme.csv", header = TRUE, stringsAsFactors = FALSE)
+sebago <- read.csv("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/data_raw/Sebago_correction.csv", header = FALSE, stringsAsFactors = FALSE)
+names(sebago) <- names(tick_disease_big)
+
+tick_disease_big <- rbind(tick_disease_big, sebago)
+
 
 tick_disease_big$Population <- gsub(pattern = ",", replacement = "", tick_disease_big$Population)
 
@@ -14,12 +19,17 @@ unique(tick_disease_big$Number)
 
 towns_for_validation <- c("Bridgton","Sebago",  "Westbrook")
 
-towns_to_run <- towns_in_cumberland[!(towns_in_cumberland %in% towns_for_validation)]
+towns_to_run <- towns_in_cumberland#towns_in_cumberland[!(towns_in_cumberland %in% towns_for_validation)]
+
+
 
 ## Correct names for spacing
 tick_disease_big$Location <- gsub(" ", "_", tick_disease_big$Location)
 tick_disease <- tick_disease_big[tick_disease_big$Location %in% towns_in_cumberland, ]
 
+## Get a vectors of towns that have cencsored data
+has_less_than_six <- dplyr::filter(tick_disease, tick_disease$Number == "<6")
+towns_with_less_than_six <- as.character(unique(has_less_than_six$Location))
 
 unique(tick_disease$Number)
 

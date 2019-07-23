@@ -1,8 +1,37 @@
 ```{r}
-library(rjags)
-library(coda)
-library(ggplot2)
-library(dplyr)
+library(rjags, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
+library(lazyeval, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
+library(ggplot2, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
+library(coda, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
+library(dplyr, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
+```
+# Load data
+```{r}
+tick_disease_big <- read.csv("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/town_level_data_lyme.csv", header = TRUE, stringsAsFactors = FALSE)
+
+tick_disease_big$Population <- gsub(pattern = ",", replacement = "", tick_disease_big$Population)
+
+towns_in_cumberland <- c("Harpswell", "Freeport", "Brunswick", "Pownal", "Frye_Island", "Yarmouth", 
+                         "Cumberland", "Standish", "Chebeague_Island", "Portland", "Falmouth", "South_Portland", 
+                         "Cape_Elizabeth", "Long_Island", "Scarborough", "Harrison", "Gray", "North_Yarmouth", 
+                         "Baldwin", "Bridgton", "Casco", "Raymond", "Naples", "Sebago", "Windham", "Gorham",
+                         "Westbrook", "New_Gloucester")
+unique(tick_disease_big$Number)
+
+towns_for_validation <- c("Bridgton","Sebago",  "Westbrook")
+
+towns_to_run <- towns_in_cumberland[!(towns_in_cumberland %in% towns_for_validation)]
+
+## Correct names for spacing
+tick_disease_big$Location <- gsub(" ", "_", tick_disease_big$Location)
+tick_disease <- tick_disease_big[tick_disease_big$Location %in% towns_in_cumberland, ]
+
+tick_disease_big$Location <- gsub(" ", "_", tick_disease_big$Location)
+tick_disease <- tick_disease_big[tick_disease_big$Location %in% towns_in_cumberland, ]
+
+
+
+
 ```
 
 ## A Binomial null model
@@ -94,7 +123,7 @@ for (i in seq_along(towns_in_rest_of_maine)){
 }
 
 ## Take mean of that distribution
-hist(variations)
+#hist(variations)
 mean_year_year_variability <- mean(variations) ## What to plug into the poission 
 
 ```
@@ -134,9 +163,13 @@ for (i in seq_along(towns_in_cumberland)){
   town_x_ic$x_ic <- floor(town_x_ic$x_ic) # Take care of 0.1 case
 }
 
+<<<<<<< HEAD
+#town_x_ic$x_ic <- town_x_ic$x_ic 
+=======
 town_x_ic$x_ic[town_x_ic$x_ic == 0 ] <- 1 # because we never expect zero for latent state
 town_x_ic <- na.omit(town_x_ic)
 
+>>>>>>> 1fc0265d1b2b8c73900bf789dd69d6383e8d953e
 ```
 
 ```{r}
@@ -258,37 +291,27 @@ if(is.na(burnin)){
 ## Looping over every town in cumberland 
 
 note: Frye_Island is failing to converge, becuase a special case of data. Long_Island also failing to converge.  
+note: Frye_Island is failing to converge, becuase a special case of data. Long_Island also failing to converge.  
 ```{r}
 # Special children, failed to converge for maybe structural reasons: c("Pownal", "Harrison", "Baldwin")
 ## Converged: "Portland",  "Standish", "Cape_Elizabeth", "Scarborough", "Gorham", "New_Gloucester"
 ## Still more : "Chebeague_Island", "Long_Island" 
-#towns_to_run <- c("Chebeague_Island", "Long_Island") # no Frye_Island because NA in data
-# Sebago only has two years? 
-#"Baldwin" run
-# Need to run with larger size "Harrison", "Bridgton"
-towns_to_run <- c("Westbrook", "Pownal" ) #Pownal might need longer to converge
 
-
-
-
+towns_to_run <- c("Chebeague_Island", "Long_Island", "Bridgton" , "Sebago"   , "Westbrook","Pownal", "Harrison", "Baldwin") # no Frye_Island because NA in data
 for (i in seq_along(towns_to_run)){
   
  town_name <- towns_to_run[i]
-
 tick_data <- tick_disease
-
   tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
   tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year > 2008) # Used 2008 as prior on system
   tick_disease_tmp$Number[tick_disease_tmp$Year > 2016] <- NA # Hold out three years for validation. 
   tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year) # Make sure model is fitting through time
   
 tick_data <- tick_disease_tmp
-
 data_list <- list(less_than_six_indices = points_of_less_than_six, numeric_indices =numeric_indices, n = 7, a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , y = tick_disease_tmp$Number,  x_ic = town_x_ic$x_ic[town_x_ic$Location == town_name] , pop = as.numeric(tick_disease_tmp$Population))
-
 print(town_name)
+
 output <- fit_binomial_null(tick_data, has_suppressed = TRUE, town_name, n.iter = 1051000, data_list, init_detection_rate = 0.9, init_ic = as.numeric(tick_data$Number[1]) )
   
 }
-
 ```
