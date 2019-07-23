@@ -1,8 +1,8 @@
 
 
 ### Reading in tick data
-tick_disease_big <- read.csv("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/town_level_data_lyme.csv", header = TRUE, stringsAsFactors = FALSE)
-sebago <- read.csv("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/data_raw/Sebago_correction.csv", header = FALSE, stringsAsFactors = FALSE)
+tick_disease_big <- read.csv("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/town_level_data_lyme.csv", header = TRUE, stringsAsFactors = FALSE)
+sebago <- read.csv("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/data_raw/Sebago_correction.csv", header = FALSE, stringsAsFactors = FALSE)
 names(sebago) <- names(tick_disease_big)
 
 tick_disease_big <- rbind(tick_disease_big, sebago)
