@@ -7,7 +7,7 @@ output: html_document
 
 ## Read in data
 ```{r}
-towns_with_jags_output <- list.files("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/")
+towns_with_jags_output <- list.files("/Maine_Tick_Disease_Forecast/Jags_output/")
 towns_with_jags_output <- towns_with_jags_output[grep("binomial_null", towns_with_jags_output)]
 file_names <- towns_with_jags_output
 towns_with_jags_output <- gsub("20190716.binomial_null.", "", towns_with_jags_output)
@@ -25,7 +25,7 @@ output <- as.data.frame(output)
 names(output) <- c("Location", "detection_prob_mean", "detection_prob_sd", "infection_prob_mean","infection_prob_sd", "2009_mean", "2009_sd", "2010_mean", "2010_sd", "2011_mean", "2011_sd", "2012_mean", "2012_sd","2013_mean", "2013_sd","2014_mean", "2014_sd","2015_mean", "2015_sd","2016_mean", "2016_sd","2017_mean", "2017_sd","2018_mean", "2018_sd")
 
 for(i in seq_along(towns_with_jags_output)){
-  file_path <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", file_names[i], sep = "")
+  file_path <- paste("/Maine_Tick_Disease_Forecast/Jags_output/", file_names[i], sep = "")
   load(file_path)
   matrix <- as.matrix(jags.burn)
   output$Location[i] <- towns_with_jags_output[i]
@@ -66,7 +66,8 @@ write.csv(output, file = "/Users/tess/Documents/work/Maine_Tick_Disease_Forecast
 ## Validate for new years and towns
 ```{r}
 library(ggplot2)
-devtools::install_github("EcoForecast/ecoforecastR")
+# devtools::install_github("EcoForecast/ecoforecastR")
+library(ecoforecastR)
 
 plotable <- matrix(NA, ncol = 3, nrow = 10) 
 plotable <- as.data.frame(plotable)
@@ -75,7 +76,7 @@ names(plotable) <- c("year", "num_incidence", "sd")
   
 for(i in seq_along(towns_with_jags_output)){
   
-  file_path <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", file_names[i], sep = "")
+  file_path <- paste("/Maine_Tick_Disease_Forecast/Jags_output/", file_names[i], sep = "")
   load(file_path)
   matrix <- as.matrix(jags.burn)
   sub_matrix <- matrix[,-c(1:2)]
@@ -98,7 +99,7 @@ title(towns_with_jags_output[i])
 
 colnames(ci) <-c(2009:2018)
 
-file_path_export <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/modeled_output/", towns_with_jags_output[i], "_confidence_interval_binomial_null_ouput.csv", sep = "")
+file_path_export <- paste("/Maine_Tick_Disease_Forecast/modeled_output/", towns_with_jags_output[i], "_confidence_interval_binomial_null_ouput.csv", sep = "")
 write.csv(ci, file = file_path_export)
   
  
