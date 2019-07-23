@@ -206,7 +206,8 @@ for (i in seq_along(towns_to_run)){
   tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year >= 2008) 
   tick_disease_tmp$Number[tick_disease_tmp$Year > 2016] <- NA # Hold out three years for validation. 
   tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year) # Make sure model is fitting through time
-  
+  tick_data <- dplyr::distinct(tick_data)
+  tick_disease_tmp <- dplyr::distinct(tick_disease_tmp)
   
   tick_data <- tick_disease_tmp
   less_than_six_indices <- which(tick_data$Number == "<6" )
