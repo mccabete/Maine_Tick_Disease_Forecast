@@ -21,10 +21,15 @@ towns_for_validation <- c("Bridgton","Sebago",  "Westbrook")
 
 towns_to_run <- towns_in_cumberland#towns_in_cumberland[!(towns_in_cumberland %in% towns_for_validation)]
 
+
+
 ## Correct names for spacing
 tick_disease_big$Location <- gsub(" ", "_", tick_disease_big$Location)
 tick_disease <- tick_disease_big[tick_disease_big$Location %in% towns_in_cumberland, ]
 
+## Get a vectors of towns that have cencsored data
+has_less_than_six <- dplyr::filter(tick_disease, tick_disease$Number == "<6")
+towns_with_less_than_six <- as.character(unique(has_less_than_six$Location))
 
 unique(tick_disease$Number)
 
