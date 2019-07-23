@@ -1,10 +1,13 @@
 
-i <- 9
+source("aggrigate_data.R")
 
+i <- 4
+
+## grabbed from other scripts
 town <- subset(tick_disease, Location == towns_in_cumberland[i])
 town <- town[order(town$Year),,drop = FALSE]
 town <- subset(town, Year >= 2008 & Year <= 2015)
-town2model <- town$Location[1]
+town2model <- town$Location[1] # used in aggrigate_data function
 
 if(town2model == "Pownal"){
   town <- town[c(1,3,4,6,8,10,11,12),]
