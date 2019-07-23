@@ -2,6 +2,11 @@
 
 ### Reading in tick data
 tick_disease_big <- read.csv("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/town_level_data_lyme.csv", header = TRUE, stringsAsFactors = FALSE)
+sebago <- read.csv("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/data_raw/Sebago_correction.csv", header = FALSE, stringsAsFactors = FALSE)
+names(sebago) <- names(tick_disease_big)
+
+tick_disease_big <- rbind(tick_disease_big, sebago)
+
 
 tick_disease_big$Population <- gsub(pattern = ",", replacement = "", tick_disease_big$Population)
 
@@ -14,7 +19,7 @@ unique(tick_disease_big$Number)
 
 towns_for_validation <- c("Bridgton","Sebago",  "Westbrook")
 
-towns_to_run <- towns_in_cumberland[!(towns_in_cumberland %in% towns_for_validation)]
+towns_to_run <- towns_in_cumberland#towns_in_cumberland[!(towns_in_cumberland %in% towns_for_validation)]
 
 ## Correct names for spacing
 tick_disease_big$Location <- gsub(" ", "_", tick_disease_big$Location)
