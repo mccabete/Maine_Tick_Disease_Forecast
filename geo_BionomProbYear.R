@@ -209,13 +209,7 @@ for (i in seq_along(towns_to_run)){
   data_list <- list(a_obs = beta_of_true_tick_rate$alpha, 
                     b_obs = beta_of_true_tick_rate$beta , 
                     y = tick_disease_tmp$Number, 
-                    pop = as.numeric(tick_disease_tmp$Population), 
-                    b0 = as.vector(c(-5,0)),      ## regression beta means
-                    Vb = solve(diag(25,2)),
-                    data_max = max(max(terra), max(aqua)), 
-                    data_min = min(min(terra), min(aqua)), 
-                    terra = terra,
-                    aqua = aqua)
+                    pop = as.numeric(tick_disease_tmp$Population))
   print(town_name)
   fit_binomial_prob_year(tick_data, has_suppressed = TRUE, town_name, n.iter = n.iter, data_list, init_detection_rate = 0.9, init_data = init_data )
   print(paste(town_name, "Finished"))
