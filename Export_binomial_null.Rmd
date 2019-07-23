@@ -1,0 +1,111 @@
+---
+title: "Export_binomial_null"
+author: "Tempest McCabe"
+date: "7/16/2019"
+output: html_document
+---
+
+## Read in data
+```{r}
+towns_with_jags_output <- list.files("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/")
+towns_with_jags_output <- towns_with_jags_output[grep("binomial_null", towns_with_jags_output)]
+file_names <- towns_with_jags_output
+towns_with_jags_output <- gsub("20190716.binomial_null.", "", towns_with_jags_output)
+towns_with_jags_output <- gsub("20190716.binomial_null.", "", towns_with_jags_output)
+towns_with_jags_output <- gsub(".convergence_passed_GBR_test.JAGS_run.Rdata", "", towns_with_jags_output)
+                
+```
+
+
+## get mean and SD for all values
+```{r}
+### Declare storage matrix
+output <- matrix(NA, ncol = 25, nrow = length(towns_with_jags_output)) 
+output <- as.data.frame(output)
+names(output) <- c("Location", "detection_prob_mean", "detection_prob_sd", "infection_prob_mean","infection_prob_sd", "2009_mean", "2009_sd", "2010_mean", "2010_sd", "2011_mean", "2011_sd", "2012_mean", "2012_sd","2013_mean", "2013_sd","2014_mean", "2014_sd","2015_mean", "2015_sd","2016_mean", "2016_sd","2017_mean", "2017_sd","2018_mean", "2018_sd")
+
+for(i in seq_along(towns_with_jags_output)){
+  file_path <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", file_names[i], sep = "")
+  load(file_path)
+  matrix <- as.matrix(jags.burn)
+  output$Location[i] <- towns_with_jags_output[i]
+  ## Probabilities
+  output$detection_prob_mean[i] <- mean(matrix[,1])
+  output$detection_prob_sd[i] <- sd(matrix[,1])
+  output$infection_prob_mean[i] <- mean(matrix[,2])
+   output$infection_prob_sd[i] <- sd(matrix[,2])
+  ## Yearly estimates
+   output$`2009_mean`[i] <- mean(matrix[,3])
+  output$`2009_sd`[i] <- mean(matrix[,3])
+  output$`2010_mean`[i] <- mean(matrix[,4])
+  output$`2010_sd`[i] <- sd(matrix[,4])
+  output$`2011_mean`[i] <- mean(matrix[,5])
+  output$`2011_sd`[i] <- sd(matrix[,5])
+  output$`2012_mean`[i] <- mean(matrix[,6])
+  output$`2012_sd`[i] <- sd(matrix[,6])
+  output$`2013_mean`[i] <- mean(matrix[,7])
+  output$`2013_sd`[i] <- sd(matrix[,7])
+  output$`2014_mean`[i] <- mean(matrix[,8])
+  output$`2014_sd`[i] <- sd(matrix[,8])
+  output$`2015_mean`[i] <- mean(matrix[,9])
+  output$`2015_sd`[i] <- sd(matrix[,9])
+  output$`2016_mean`[i] <- mean(matrix[,10])
+  output$`2016_sd`[i] <- sd(matrix[,10])
+  output$`2017_mean`[i] <- mean(matrix[,11])
+  output$`2017_sd`[i] <- sd(matrix[,11])
+  output$`2018_mean`[i] <- mean(matrix[,12])
+  output$`2018_sd`[i] <- sd(matrix[,12])
+  rm(jags.burn)# Clean up
+}
+
+write.csv(output, file = "/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/modeled_output/Binomial_null_ouput.csv")
+
+```
+
+
+## Validate for new years and towns
+```{r}
+library(ggplot2)
+devtools::install_github("EcoForecast/ecoforecastR")
+
+plotable <- matrix(NA, ncol = 3, nrow = 10) 
+plotable <- as.data.frame(plotable)
+names(plotable) <- c("year", "num_incidence", "sd")
+
+  
+for(i in seq_along(towns_with_jags_output)){
+  
+  file_path <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", file_names[i], sep = "")
+  load(file_path)
+  matrix <- as.matrix(jags.burn)
+  sub_matrix <- matrix[,-c(1:2)]
+  plotable$year <- 2009:2018
+  plotable$num_incidence <- apply(sub_matrix, 2, mean)
+  #plotable$ <- 
+  tick_disease_tmp <- tick_disease[(tick_disease$Location == towns_with_jags_output[i] ),] 
+  tick_data <- tick_disease_tmp
+  tick_data <- dplyr::filter(tick_data, tick_data$Year > 2008) # Used 2008 as prior on system
+  tick_data <- dplyr::arrange(tick_data, by = tick_data$Year) # Make sure model is fitting through time
+  
+  y <- as.numeric(tick_data$Number)
+  years <- as.character(c(2009:2018))
+  
+ci <- apply(sub_matrix,2,quantile,c(0.025,0.5,0.975))
+plot(years,ci[2,],type='n',ylim=range(ci),ylab="Number of Lyme cases")
+ecoforecastR::ciEnvelope(years,ci[1,],ci[3,],col="lightBlue")
+points(years,y,pch="+",cex=1)
+title(towns_with_jags_output[i])
+
+colnames(ci) <-c(2009:2018)
+
+file_path_export <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/modeled_output/", towns_with_jags_output[i], "_confidence_interval_binomial_null_ouput.csv", sep = "")
+write.csv(ci, file = file_path_export)
+  
+ 
+  
+  #rm(jags.burn)# Clean up
+}
+
+
+
+```

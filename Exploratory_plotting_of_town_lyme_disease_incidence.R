@@ -1,7 +1,7 @@
 
 
 ### Reading in tick data
-tick_disease_big <- read.csv("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/Maine_Tick_Disease_Forecast/town_level_data_lyme.csv", header = TRUE, stringsAsFactors = FALSE)
+tick_disease_big <- read.csv("town_level_data_lyme.csv", header = TRUE, stringsAsFactors = FALSE)
 
 tick_disease_big$Population <- gsub(pattern = ",", replacement = "", tick_disease_big$Population)
 
@@ -30,7 +30,7 @@ unique(tick_disease$Number)
 #Generate all the file paths
 file_path <- matrix(NA, nrow = length(towns_in_cumberland), ncol = 1)
 for (i in seq_along(towns_in_cumberland)){
-  file_path[i] <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/data_raw/Test_Time_Series","/", towns_in_cumberland[i],"/", sep = "")
+  file_path[i] <- paste("data_raw/Test_Time_Series","/", towns_in_cumberland[i],"/", sep = "")
 }
 
 ## Precip
