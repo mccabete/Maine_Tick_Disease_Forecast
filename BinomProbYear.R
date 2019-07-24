@@ -5,6 +5,7 @@
 
 
 
+
 ## grabbed from other scripts
 town <- subset(tick_disease, Location == towns_in_cumberland[i])
 town <- town[order(town$Year),,drop = FALSE]
