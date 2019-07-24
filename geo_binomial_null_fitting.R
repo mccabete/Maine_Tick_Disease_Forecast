@@ -27,14 +27,18 @@ towns_to_run <- towns_in_cumberland #[!(towns_in_cumberland %in% towns_for_valid
 
 ## Correct names for spacing
 print("correcting names in tick_disease")
-
-tmp <- gsub(" ", "_", tick_disease_big$Location)
-tmp <- as.data.frame(tmp)
-tick_disease_big$Location <- tmp
-tick_disease <- tick_disease_big[as.matrix(tick_disease_big$Location) %in% towns_in_cumberland, ]
+tick_disease_big <- as.matrix(tick_disease_big)
+tick_disease_big[,1] <- as.vector(gsub(" ", "_",tick_disease_big[,1]))
+tick_disease_big <- as.data.frame(tick_disease_big, stringsAsFactors = FALSE)
 
 
-
+## Subsetting to just towns in cumberland
+print("subsetting to cumberland county towns")
+tick_disease <- c()
+for (i in seq_along(towns_in_cumberland)){
+  tmp <- tick_disease_big[tick_disease_big$Location == towns_in_cumberland[i],]
+  tick_disease <- rbind(tick_disease, tmp)
+}
 
 
 ## Get beta params
@@ -73,10 +77,10 @@ fit_binomial_null <- function(tick_data, has_suppressed = TRUE, town_name, n.ite
   less_than_six_indices <- which(tick_data$Number == "<6" )
   numeric_indices <- which(tick_data$Number != "<6")
   
-  data_list$n <- length(tick_data$Year) 
-  data_list$numeric_indices <- numeric_indices
-  data_list$less_than_six_indices <- less_than_six_indices
-  data_list$y <- tick_data$Number
+  data_list$n = length(tick_data$Year) 
+  data_list$numeric_indices = numeric_indices
+  data_list$less_than_six_indices = less_than_six_indices
+  data_list$y = tick_data$Number
   
   ## Check if has suppressed data. If yes, provide flow control
   if (rlang::is_empty(less_than_six_indices)){
@@ -196,7 +200,9 @@ for (i in seq_along(towns_to_run)){
   tick_data <- tick_disease
   tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
   tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year >= 2008) 
-  tick_disease_tmp$Number[tick_disease_tmp$Year > 2016] <- NA # Hold out three years for validation. 
+  tick_disease_tmp <- as.matrix(tick_disease_tmp)
+  tick_disease_tmp[,3][tick_disease_tmp[,2] > 2016] <- NA # Hold out three years for validation. 
+  tick_disease_tmp <- as.data.frame(tick_disease_tmp, stringsAsFactors = FALSE)
   tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year) # Make sure model is fitting through time
   
   
@@ -214,7 +220,7 @@ for (i in seq_along(towns_to_run)){
   }
   init_data <- as.numeric(init_data) 
   
-  data_list <- list(less_than_six_indices = less_than_six_indices, numeric_indices =numeric_indices,  a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , 
+  data_list <- list( a_obs = beta_of_true_tick_rate$alpha, b_obs = beta_of_true_tick_rate$beta , 
                     y = tick_disease_tmp$Number, pop = as.numeric(tick_disease_tmp$Population))
   print(town_name)
   fit_binomial_null(tick_data, has_suppressed = TRUE, town_name, n.iter = n.iter, data_list, init_detection_rate = 0.9, init_data = init_data )
