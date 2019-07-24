@@ -186,7 +186,9 @@ source("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/aggrigate_data.R")
 print("looping over towns")
 need_mid_runs <- c( "Bridgton" , "Sebago"   , "Westbrook", "Harrison", "Baldwin") 
 need_long_runs <- c("Chebeague_Island", "Long_Island", "Pownal")
-for (i in seq_along(towns_to_run)){
+
+i <- as.numeric(Sys.getenv("SGE_TASK_ID")) # read array job number to paste into output file
+
   town_name <- towns_to_run[i]
   
   print("Loading covariates")
@@ -237,7 +239,7 @@ for (i in seq_along(towns_to_run)){
   print(town_name)
   fit_binomial_prob_year(tick_data, has_suppressed = TRUE, town_name, n.iter = n.iter, data_list, init_detection_rate = 0.9, init_data = init_data )
   print(paste(town_name, "Finished"))
-}
+
 
 
 

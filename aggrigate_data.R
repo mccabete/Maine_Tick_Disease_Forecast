@@ -14,8 +14,9 @@
 
 library(xlsx, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
 library(lubridate, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
-library(tidyverse, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
 library(tidyr, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
+library(tidyverse, lib.loc = "/share/pkg.7/r/3.6.0/install/lib64/R/library")
+
 
 aggrigate_data <- function(full_path, met.file, town){
  
