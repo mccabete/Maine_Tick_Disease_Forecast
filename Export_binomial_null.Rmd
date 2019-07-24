@@ -12,6 +12,7 @@ towns_with_jags_output <- towns_with_jags_output[grep("binomial_null", towns_wit
 file_names <- towns_with_jags_output
 towns_with_jags_output <- gsub("20190716.binomial_null.", "", towns_with_jags_output)
 towns_with_jags_output <- gsub("20190716.binomial_null.", "", towns_with_jags_output)
+towns_with_jags_output <- gsub("20190717.binomial_null.", "", towns_with_jags_output)
 towns_with_jags_output <- gsub(".convergence_passed_GBR_test.JAGS_run.Rdata", "", towns_with_jags_output)
                 
 ```
@@ -84,7 +85,7 @@ for(i in seq_along(towns_with_jags_output)){
   #plotable$ <- 
   tick_disease_tmp <- tick_disease[(tick_disease$Location == towns_with_jags_output[i] ),] 
   tick_data <- tick_disease_tmp
-  tick_data <- dplyr::filter(tick_data, tick_data$Year > 2008) # Used 2008 as prior on system
+  tick_data <- dplyr::filter(tick_data, tick_data$Year > 2008) #
   tick_data <- dplyr::arrange(tick_data, by = tick_data$Year) # Make sure model is fitting through time
   
   y <- as.numeric(tick_data$Number)
