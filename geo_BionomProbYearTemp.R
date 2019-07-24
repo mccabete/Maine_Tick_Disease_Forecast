@@ -180,11 +180,6 @@ fit_binomial_prob_year <- function(tick_data, has_suppressed = TRUE, town_name, 
 print("Sourcing aggrigate_data.R")
 source("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/aggrigate_data.R")
 
-## Loading covariets
-print("Loading covariates")
-terra <- as.vector(aggrigate_data("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/" ,"Terra_LST", town= town_name)$year.mean)
-aqua <- as.vector(aggrigate_data("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/","Aqua_LST", town= town_name)$year.mean)
-
 ### For loop
 print("looping over towns")
 need_mid_runs <- c( "Bridgton" , "Sebago"   , "Westbrook", "Harrison", "Baldwin") 
@@ -221,6 +216,11 @@ for (i in seq_along(towns_to_run)){
     init_data[init_data == "<6"] <- rep(3, length(init_data[init_data == "<6"]))
   }
   init_data <- as.numeric(init_data) 
+  
+  ## Loading covariets
+  print("Loading covariates")
+  terra <- as.vector(aggrigate_data("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/" ,"Terra_LST", town= town_name)$year.mean)
+  aqua <- as.vector(aggrigate_data("/usr3/graduate/tmccabe/Maine_Tick_Disease_Forecast/","Aqua_LST", town= town_name)$year.mean)
   
   data_list <- list(a_obs = beta_of_true_tick_rate$alpha, 
                     b_obs = beta_of_true_tick_rate$beta , 
