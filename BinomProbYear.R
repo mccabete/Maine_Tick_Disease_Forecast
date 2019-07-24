@@ -1,6 +1,4 @@
 
-source("aggrigate_data.R")
-
 i <- 4
 
 ## grabbed from other scripts
