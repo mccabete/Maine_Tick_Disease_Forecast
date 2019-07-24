@@ -1,10 +1,16 @@
 
 
 
+
+
+
+
+
+## grabbed from other scripts
 town <- subset(tick_disease, Location == towns_in_cumberland[i])
 town <- town[order(town$Year),,drop = FALSE]
 town <- subset(town, Year >= 2008 & Year <= 2015)
-town2model <- town$Location[1]
+town2model <- town$Location[1] # used in aggrigate_data function
 
 if(town2model == "Pownal"){
   town <- town[c(1,3,4,6,8,10,11,12),]
@@ -33,23 +39,18 @@ if(length(data.jags$less_than_six_indices) > 0){
   for(t in numeric_indices){
     #### Data Model
     y[t] ~ dbinom(detection_rate, x[t])
-    
-    #### Process Model - probability a function of yearly temperature
-    logit(probability[t]) <- beta[1] + beta[2]*lst[t]
-    x[t] ~ dbinom(probability[t], pop[t])
   }
  
   for(t in less_than_six_indices){   
     #### Data Model
-    y[t] ~ dbinom(detection_rate, x[t])
+    y[t] ~ dbinom(detection_rate, x[t]) T(1,5)
     
-    #### Process Model - probability a function of yearly temperature
-    logit(probability[t]) <- beta[1] + beta[2]*lst[t]
-    x[t] ~ dbinom(probability[t], pop[t])
   }
 
   for(t in 1:n){
     #### EIV
+    x[t] ~ dbinom(probability[t], pop[t])
+    logit(probability[t]) <- beta[1] + beta[2]*lst[t]
     terra[t] ~ dnorm(lst[t], tau_terra)
     aqua[t] ~ dnorm(lst[t], tau_aqua)
     lst[t] ~ dunif(-2.003567, 1.440454)
