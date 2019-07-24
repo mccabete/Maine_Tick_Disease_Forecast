@@ -1,5 +1,5 @@
 
-i <- 4
+
 
 ## grabbed from other scripts
 town <- subset(tick_disease, Location == towns_in_cumberland[i])
