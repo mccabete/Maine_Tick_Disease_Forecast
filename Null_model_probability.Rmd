@@ -1,0 +1,74 @@
+---
+title: "Null_model_probability"
+output: html_notebook
+---
+
+This model focuses on the probability of tick infection as a function of population size. 
+
+
+# Prior on probaility of infection per-person per year
+
+
+```{r}
+
+# load data
+points_of_less_than_six_big <- which(tick_disease_big$Number == "<6")
+points_of_less_than_six <- which(tick_disease$Number == "<6")
+numeric_indices <- which(tick_disease$Number != "<6")
+
+## use non cumberland, non less than six, non 2001-2008 data
+tick_disease_big_tmp <- tick_disease_big[tick_disease_big$Number != "<6",]
+tick_disease_big_tmp <- tick_disease_big_tmp[!(tick_disease_big_tmp$Location %in% towns_in_cumberland),]
+tick_disease_other <- dplyr::filter(tick_disease_big_tmp, tick_disease_big_tmp$Year > 2008)
+
+# estimate the probability that results in a disease status with other population data
+get_tick_disease_probability <- "model{
+## process model
+  for (i in 1:n){
+   number_of_disease_risk[i] ~ dbinom(probability, pop[i])
+  }
+
+## Prior
+probability ~ dbeta(1,1) # close to uniform probability
+}
+"
+
+data <- list(n = length(tick_disease_other$Number),  number_of_disease_risk = as.numeric(tick_disease_other$Number), pop = as.numeric(tick_disease_other$Population))
+  
+nchain = 3
+init <- list()
+for(i in 1:nchain){
+  init[[i]] <- list(probability = c(0.15))
+}
+
+
+j.model   <- jags.model (file = textConnection(get_tick_disease_probability),
+                             data = data,
+                             inits = init,
+                             n.chains = 3)
+
+jags.out   <- coda.samples (model = j.model,
+                            variable.names = c("probability"),
+                                n.iter = 11000)
+plot(jags.out)
+
+GBR <- gelman.plot(jags.out)
+
+#burnin <- GBR$last.iter[tail(which(apply(GBR$shrink[,,2]>1.05,1,any)),1)+1] #Statement not working. 
+jags.burn <- window(jags.out,start=4000, extend = FALSE)
+
+effectiveSize(jags.burn) # Solid 3x as many as we need
+jags.burn <- as.matrix(jags.burn)
+plot(density(jags.burn), main = "Probability of Tick disease per population member per year")
+
+
+### Test: Does this meet the same assumptions of the class? (as in, will we see numbers bounded by  1-6?)
+less_than_six_pop <- as.numeric(tick_disease_big$Population[points_of_less_than_six_big])
+prob <- sample(jags.burn, size = length(less_than_six_pop))
+number_of_tick_disease_incidences <- rbinom(length(less_than_six_pop), less_than_six_pop, prob)
+
+```
+
+
+
+Note: For this prior I need to solve for the parameters of the beta distribution. Solving the Beta equation parameters useing simultanious equations was actually somewhat non-trivial, and someone already did it. The answer I am useing in from [here](https://stats.stackexchange.com/questions/12232/calculating-the-parameters-of-a-beta-distribution-using-the-mean-and-variance). 

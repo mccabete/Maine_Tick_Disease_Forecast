@@ -67,7 +67,7 @@ write.csv(output, file = "/Users/tess/Documents/work/Maine_Tick_Disease_Forecast
 ## Validate for new years and towns
 ```{r}
 library(ggplot2)
-devtools::install_github("EcoForecast/ecoforecastR")
+#devtools::install_github("EcoForecast/ecoforecastR")
 
 plotable <- matrix(NA, ncol = 3, nrow = 10) 
 plotable <- as.data.frame(plotable)
@@ -99,13 +99,23 @@ title(towns_with_jags_output[i])
 
 colnames(ci) <-c(2009:2018)
 
-file_path_export <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/modeled_output/", towns_with_jags_output[i], "_confidence_interval_binomial_null_ouput.csv", sep = "")
-write.csv(ci, file = file_path_export)
-  
- 
+#file_path_export <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/modeled_output/", towns_with_jags_output[i], "_confidence_interval_binomial_null_ouput.csv", sep = "")
+#write.csv(ci, file = file_path_export)
   
   #rm(jags.burn)# Clean up
 }
+
+
+
+```
+
+
+## Exploratory plotting
+
+```{r}
+plot(output$detection_prob_mean, output$infection_prob_mean, xlab = "detection probability", ylab = "infection probability", log = "y")
+abline(0,1)
+plot(output$detection_prob_mean, output$infection_prob_mean, xlab = "detection probability", ylab = "infection probability", log = "y")
 
 
 
