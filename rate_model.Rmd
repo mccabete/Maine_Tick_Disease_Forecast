@@ -5,60 +5,31 @@ library(ggplot2)
 library(dplyr)
 ```
 
-## A Binomial null model
+## A normal null model
 
-This Binomial null model models having lyme as a binomial process twice. The first time is a model of detection probability, which says the the number of observed cases is a function of some probability of detecting lyme in a patient, and the "true" number of lyme cases is the number of trials fed into the binomial disitrbution. The second time is modeling the incidence of lyme in a town as a fucntion of population of that town. We say that each per-year-person has some probability of contracting lyme disease. 
+This model is a normal-distribution based random walk model that guesses that the next step of a system is just the previous step plus year-year variability. 
 
 ## Developing priors
 
-# Prior on error levels of underreporting (a_obs, b_obs)
+# A Prior on the observation error
 
-The full data model is what translates the observed CDC data `y[]` into the latent state `x[]`. The latent state is meant to represent a "true" number of lyme cases, with an understanding that the reported lyme cases are underreported. The data model aproximates the latent state based on the observed state. This means that crafting a data model requires knowing how/why cases are underreported. 
+We use the Nelson et al 2015 study that estimated underreporting nationally by about 10-fold using insurance claims. They reported that the CDC numbers (9.4 per 100000) were actually 106.6 per 100000 minus 10% or plus 11.42%. That was based on 2005-2010 data, which includes data from different reporting strategies. 
 
-Cases of disease are undereported for a variaety of interacting reasons, including access to medical care/ testing facilities, awareness of disease, cost of medical treatment, false negatives in testing, misdiagnosis etc.
+There are several compounding factors: This is a national estimate of observational error, representing two different CDC reporting strategies, and covering a time period that has little overlap with our model fits. To account for this error, we will say the mean error is a 10-fold increase, but that the varibilty around that error is large- anywhere from a sligth underestimate to a 22-fold increase. This roughly agrees with other liturature mentioned in the paper ( the Hinckley et al paper, which focuses on false negatives from serology tests and the Mead 2015 paper). 
 
-Having an error term that encoumpassed all those reasons for underreporting would be ideal, but there are very few papers that provide numerical estimates for all of the above reasons. Some papers have estimated error rates in blood-sample-testing, and diagnosis rates (see below). 
+# A prior on yearly variability 
+We generated a prior for yearly variability by taking the differences in year-year from non-maine states. We then moment matched that distribution. 
 
-We wanted to have a CDC-provided estimate of the error to put into the prior, but also anouther estimate to benchmark our modeled output against. Ideally, the prior would be set by a more general estimate of the error, and we could then benchmark against Maine-level estimates. 
+# A prior on X[1]
 
-Currently, the plan is to make a prior based on the Hinckley et al paper, and have our model be predicting the number of people with lyme disease that were tested, but got a negative result. The two gate-keepers for tick disease reporting to the CDC are positive lab results, and identification of symptoms (rash/ clinicaly defined symotoms) and diagnosis by a medical profesional. Out data model will constrain false negatives from the blood lab results, but that will not constrain uderreporting assosiated with access to lab-testing, accesing the medical community, or underreporting within the medical community. We also don't deal with false positives within testing becuase the CDC criteria for reporting has a high level of certainty.
-
-
-Hinckley et al paper reports a "True positive rate" of the number of samples sent for testing, and an "observed" positive rate for two tests . I am not sure what type of assay is used in the labs that inform Maine incident reports, but two types are reported in the Hinckley et al: the Two-tiered whole cell test, and the EIA/IFA stand-alone or first tier test. They also report the proportion of the samples that were tested useing those two tests, so we will assume the same proportions (Table 3 of Hinckley et al).
-
-```{r}
-# reprted "true positive" is 0.12 with range of 0.1 to 0.185. With rate of 0.12,  288 000 cases were reported ( range of 240000 - 444000. 
-
-
-estBetaParams <- function(mu, var) {
-  alpha <- ((1 - mu) / var - 1 / mu) * mu ^ 2
-  beta <- alpha * (1 / mu - 1)
-  return(params = list(alpha = alpha, beta = beta))
-}
-
-mu_true_pos <- 0.12
-observed_pos_1 <- 0.0579 # Two Tier
-observed_pos_2 <- 0.1189 # EIA/ IFA Stand-alone or First Tier
-proportion_used_1 <- 297619/ (297619 + 287595)  # Reported number of tests for two-tierd / total 
-proportion_used_2 <- 287595/ (297619 + 287595) # Reported number of tests for two-tierd / total 
-
-weighted_obs_pos <- (0.0579 *proportion_used_1) + (0.1189*proportion_used_2)
-
-detection_rate_mu <- weighted_obs_pos / mu_true_pos
-detection_rate_min <-  weighted_obs_pos / 0.185
-detection_rate_max <- weighted_obs_pos / 0.1
-
-var_true_pos <- 0.11 # Something larger than min and max, but still constrained by them. 
-
-beta_of_true_tick_rate <- estBetaParams(detection_rate_mu, var_true_pos)
-
-```
+Our prior on X[1] was based on a poission distribution of the previous-year's count data converted to a rate,  plus yearly observation error. In the case where the previous year was a "<6" character, I treat it as an observed "3". 
 
 
 
 ```{r}
 fit_binomial_null <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 91000, data_list, init_detection_rate,init_ic ){
   
+  tick_data <- tick_disease
   tick_data <- dplyr::arrange(tick_data, by = tick_data$Year) # Make sure to be going in order of year
    
   
@@ -82,24 +53,28 @@ model{
   #### Data Model
   for(t in numeric_indices){
    
-   y[t] ~ dbinom(detection_rate, x[t])
+   y[t] ~ dgamma(x[t], observation_error) #I think observation error should be 10ish
  }
  
   for(t in less_than_six_indices){   ## Maybe consider a population cutoff, and allow zeros
-   y[t] ~ dbinom(detection_rate, x[t]) T(1,5)
+   rate_cutoff_low <- (1/pop[t]) * 100000 
+   rate_cutoff_high <- (5/pop[t]) * 100000 
+   y[t] ~ dnorm(x[t], observation_error) T(rate_cutoff_low, rate_cutoff_high)
   }
 
   #### Process Model
-   for (i in 1:n){
-   x[i] ~ dbinom(probability, pop[i])
+   for (i in 2:n){
+   x[i] ~ dnorm(x[i - 1],yearly_variability)
   }
 
-  ## Prior
-  probability ~ dbeta(1,1) #uniform probability
+   ### Swap varience for precision
+  observation_error <- dnorm(10, 1)
+  yearly_variability <- 1/ (prior_on_yearly_variability^2)
   
+
   #### Priors
-  detection_rate ~ dbeta(a_obs,b_obs) 
- 
+  x[1] ~ dnorm(year_before_start_year, fixed_yearly_variability)
+  prior_on_yearly_variability ~ dgamma()
 }
 "
   }else{
@@ -108,18 +83,23 @@ model{
   
   #### Data Model
   for(t in numeric_indices){
-   y[t] ~ dbinom(detection_rate, x[t])
-  }
+   y[t] ~ dnorm(x[t], observation_error)
+ }
 
   #### Process Model
-   for (i in 1:n){
-   x[i] ~ dbinom(probability, pop[i])
+   for (i in 2:n){
+   x[i] ~ dnorm(x[i - 1],yearly_variability)
   }
 
   
+  ### Swap varience for precision
+  observation_error <- dnorm(10, 1)
+  yearly_variability <- 1/ (prior_on_yearly_variability^2)
+  
+
   #### Priors
-  detection_rate ~ dbeta(a_obs, b_obs)
-  probability ~ dbeta(1,1) #uniform probability
+  x[1] ~ dnorm(year_before_start_year, fixed_yearly_variability)
+  prior_on_yearly_variability <- dgamma() 
 }
 "
   }
@@ -131,7 +111,7 @@ model{
 nchain = 3
 init <- list()
 for(i in 1:nchain){
-  init[[i]] <- list( detection_rate <- init_detection_rate , x_ic <- init_ic) # Maybe check  these 
+  init[[i]] <- list( ) # Maybe check  these 
 }
 
 
@@ -227,12 +207,5 @@ Some national error estimates include [this paper](https://academic.oup.com/cid/
 *Maine Estimates of errors*
 
 [There are 2011-2016 estimates of prevelance](https://data.mainepublichealth.gov/tracking/metadata-lyme-prevalence) by town in Maine. Because Prevelance = Incidence x Average duration of disease, we may be able to compare our estimates to prevelance data as measured by the survey. However, prevelance is estimated by the question "Have you ever been told by a doctor, nurse, or other health professional that you have Lyme disease?”. This question does not capture populations that would not have intereacted with medical profesionals. However, it could be a cool benchmark on the state/ on the error assosiated with individuals who do intereact with medical profesionals, but who's disease does not meet the criteria of either probable or confirmed. 
-
-*Other Maine data to use*
-[Deer ticks sent in for testing 1989-2013](https://data.mainepublichealth.gov/tracking/metadata-tickborne-ticks)
-
-[Emergency room visits related to tick bites 2017, 2018, to date 2019](https://data.mainepublichealth.gov/tracking/metadata-tickborne-near-real-time-tick-exposure)
-
-
 
  
