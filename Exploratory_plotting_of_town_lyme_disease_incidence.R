@@ -14,12 +14,18 @@ unique(tick_disease_big$Number)
 
 towns_for_validation <- c("Bridgton","Sebago",  "Westbrook")
 
-towns_to_run <- towns_in_cumberland[!(towns_in_cumberland %in% towns_for_validation)]
+
+
 
 ## Correct names for spacing
 tick_disease_big$Location <- gsub(" ", "_", tick_disease_big$Location)
 tick_disease <- tick_disease_big[tick_disease_big$Location %in% towns_in_cumberland, ]
 
+towns_suppresed <- dplyr::filter(tick_disease, tick_disease$Rate == "*"|tick_disease$Rate == "NR") %>%
+  dplyr::distinct(Location)
+
+towns_to_run <- towns_in_cumberland[!((towns_in_cumberland %in% towns_for_validation))]
+towns_to_run <- towns_in_cumberland[!((towns_in_cumberland %in% as.vector(towns_suppresed$Location)))]
 
 unique(tick_disease$Number)
 

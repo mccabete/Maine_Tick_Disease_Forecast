@@ -68,7 +68,7 @@ fit_binomial_null <- function(tick_data, has_suppressed = TRUE, town_name, n.ite
   data_list$n <- length(tick_data$Year) 
   data_list$numeric_indices <- numeric_indices
   data_list$less_than_six_indices <- less_than_six_indices
-  data_list$y <- tick_data$Number
+  
   
   ## Check if has suppressed data. If yes, provide flow control
   if (rlang::is_empty(less_than_six_indices)){
