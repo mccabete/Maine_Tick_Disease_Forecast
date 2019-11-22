@@ -25,7 +25,7 @@ towns_suppresed <- dplyr::filter(tick_disease, tick_disease$Rate == "*"|tick_dis
   dplyr::distinct(Location)
 
 towns_to_run <- towns_in_cumberland[!((towns_in_cumberland %in% towns_for_validation))]
-towns_to_run <- towns_in_cumberland[!((towns_in_cumberland %in% as.vector(towns_suppresed$Location)))]
+#towns_to_run <- towns_in_cumberland[!((towns_in_cumberland %in% as.vector(towns_suppresed$Location)))]
 
 unique(tick_disease$Number)
 

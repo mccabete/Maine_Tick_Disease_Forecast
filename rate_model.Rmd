@@ -1,3 +1,6 @@
+
+
+
 ```{r}
 library(rjags)
 library(coda)
@@ -13,9 +16,9 @@ This model is a normal-distribution based random walk model that guesses that th
 
 # A Prior on the observation error
 
-We use the Nelson et al 2015 study that estimated underreporting nationally by about 10-fold using insurance claims. They reported that the CDC numbers (9.4 per 100000) were actually 106.6 per 100000 minus 10% or plus 11.42%. That was based on 2005-2010 data, which includes data from different reporting strategies. 
+We use the Nelson et al 2015 study that estimated underreporting nationally by about 10-fold using insurance claims. They reported that the CDC numbers (9.4 per 100000) were actually 106.6 per 100000 minus 10% or plus 11.42%. That was based on 2005-2010 data, which includes data from before the CDC chagned thier reporting criteria. 
 
-There are several compounding factors: This is a national estimate of observational error, representing two different CDC reporting strategies, and covering a time period that has little overlap with our model fits. To account for this error, we will say the mean error is a 10-fold increase, but that the varibilty around that error is large- anywhere from a sligth underestimate to a 22-fold increase. This roughly agrees with other liturature mentioned in the paper ( the Hinckley et al paper, which focuses on false negatives from serology tests and the Mead 2015 paper). 
+There are several compounding factors: This is a national estimate of observational error, representing two different CDC reporting strategies, and covering a time period that has little overlap with our model fits. To account for this error, we will say the mean error is a 10-fold increase, but that the varibilty around that error is large- anywhere from a sligth underestimate to a 22-fold increase. This roughly agrees with other liturature mentioned in the paper (the Hinckley et al paper, which focuses on false negatives from serology tests and the many case-studies in the Mead 2015 paper). 
 
 # A prior on yearly variability 
 We generated a prior for yearly variability by taking the differences in year-year from non-cumberland counties. We then moment matched that distribution. If we plan on extending this analysis to  the rest of maine, will have to make a prior from non-maine states. 
@@ -56,14 +59,14 @@ for (i in seq_along(towns_in_rest_of_maine)){
 hist(variations)
 mean_year_year_variability <- mean(variations)  
 year_to_year_variability <- var(variations)
-s = mean_year_year_variability / (year_to_year_variability*2) # rior for year-year variability plus and order of magnitude
-a = s * mean_year_year_variability # Gamma for prior
+s = mean_year_year_variability / (year_to_year_variability*10) # prior for year-year variability plus and order of magnitude
+a = s * mean_year_year_variability # Moment matching 
 
 ```
 
 # A prior on X[1]
 
-Our prior on X[1] was based on a poission distribution of the previous-year's count data converted to a rate,  plus yearly observation error. In the case where the previous year was a "<6" character, I treat it as an observed "3". 
+Our prior on X[1] was based on a poission distribution of the previous-year's count data converted to a rate,  plus yearly observation error. In the case where the previous year was a "<6" character, I treat it as an observed "2.5". 
 
 # A prior on x_ic
 
@@ -136,7 +139,7 @@ model{
    rate_cutoff_high[t] <- 9999 # Filler value
  }
  
-  for(t in less_than_six_indices){   ## Maybe consider a population cutoff, and allow zeros
+  for(t in less_than_six_indices){   
    rate_cutoff_low[t] <- ((1/pop[t]) * 100000)
    rate_cutoff_high[t] <- ((5/pop[t]) * 100000)
    y[t] ~ dgamma(x[t], observation_error) T(rate_cutoff_low[t], rate_cutoff_high[t])
@@ -144,7 +147,7 @@ model{
 
   #### Process Model
    for (i in 2:n){
-   x[i] ~ dnorm(x[i - 1],yearly_variability)
+   x[i] ~ dnorm(x[i - 1],yearly_variability) T(0, )
   }
 
    ### Swap varience for precision
@@ -152,8 +155,8 @@ model{
   
 
   #### Priors
-  observation_error ~ dnorm(10, 1/5)
-  ic_var <- 1.824744*2  # add less certain prior
+  observation_error ~ dnorm(10, 1/3)
+  ic_var <- 1.824744*2  # add 2 to make prior less certain
   x[1] ~ dnorm(x_ic, 1/(ic_var))
   prior_on_yearly_variability ~ dgamma(a, s) # Fit from non cumberland data
 }
@@ -169,7 +172,7 @@ model{
 
   #### Process Model
    for (i in 2:n){
-   x[i] ~ dnorm(x[i - 1],yearly_variability)
+   x[i] ~ dnorm(x[i - 1],yearly_variability) T(0, )
   }
 
   
@@ -178,7 +181,7 @@ model{
   
 
   #### Priors
-  observation_error ~ dnorm(10, 1/5)
+  observation_error ~ dnorm(10, 1/3)
   ic_var <- 1.824744*2  # add less certain prior
   x[1] ~ dnorm(x_ic, 1/(ic_var))
   prior_on_yearly_variability ~ dgamma(a, s) # Fit from non cumberland data
@@ -226,7 +229,7 @@ if(is.na(burnin)){
   file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "binomial_null",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
   print(did_it_converge)
   print(effectiveSize(jags.burn))
-  save(jags.burn, file = file_name )
+  #save(jags.burn, file = file_name )
   return(jags.burn)
 }
 ```

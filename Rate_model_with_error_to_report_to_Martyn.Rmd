@@ -1,0 +1,281 @@
+---
+title: "Rate_model_for_Martyn"
+author: "Tempest McCabe"
+date: "11/22/2019"
+output: html_document
+---
+
+This is a first-draft of a random-walk model on cases of Lyme in just Cumberland County, Maine. 
+
+# Set up packages
+```{r}
+library(rjags)
+library(coda)
+library(ggplot2)
+library(dplyr)
+```
+
+
+## Reading in the lyme incidence data
+
+```{r}
+### Read in tick data
+tick_disease_big <- read.csv("town_level_data_lyme.csv", header = TRUE, stringsAsFactors = FALSE)
+
+tick_disease_big$Population <- gsub(pattern = ",", replacement = "", tick_disease_big$Population)
+
+towns_in_cumberland <- c("Harpswell", "Freeport", "Brunswick", "Pownal", "Yarmouth", 
+                         "Cumberland", "Standish", "Chebeague_Island", "Portland", "Falmouth", "South_Portland", 
+                         "Cape_Elizabeth", "Long_Island", "Scarborough", "Harrison", "Gray", "North_Yarmouth", 
+                         "Baldwin", "Bridgton", "Casco", "Raymond", "Naples", "Sebago", "Windham", "Gorham",
+                         "Westbrook", "New_Gloucester")
+
+towns_for_validation <- c("Bridgton","Sebago",  "Westbrook")
+
+
+## Correct names for spacing, subset to towns in cumberland county
+tick_disease_big$Location <- gsub(" ", "_", tick_disease_big$Location)
+tick_disease <- tick_disease_big[tick_disease_big$Location %in% towns_in_cumberland, ] 
+
+towns_to_run <- towns_in_cumberland[!((towns_in_cumberland %in% towns_for_validation))]
+```
+
+
+## Developing priors
+
+# A Prior on the observation error
+
+We use the Nelson et al 2015 study that estimated under-reporting nationally by about 10-fold using insurance claims. They reported that the CDC numbers (9.4 per 100000) were actually 106.6 per 100000 minus 10% or plus 11.42%. That was based on 2005-2010 data, which includes data from before the CDC changed their reporting criteria. 
+
+
+# A prior on year-year variability 
+```{r}
+## Find year to year variation for each town
+towns_in_rest_of_maine <- unique(tick_disease_big$Location)
+variations <- c()
+for (i in seq_along(towns_in_rest_of_maine)){
+  
+  town_name <- towns_in_rest_of_maine[i]
+  tick_data <- tick_disease_big
+
+  tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
+  tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year >= 2008)
+  tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year < 2016) 
+  
+  print(town_name)
+  for(j in 1:(length(tick_disease_tmp$Year-1))){
+    
+    is_numeric_j <- try(as.numeric(tick_disease_tmp$Number[j]))
+    is_numeric_j_next <- try(as.numeric(tick_disease_tmp$Number[j + 1]))
+    
+    if(!is.na(is_numeric_j) && !is.na(is_numeric_j_next)){
+      diff <- as.numeric(tick_disease_tmp$Number[j]) - as.numeric(tick_disease_tmp$Number[j + 1])
+      #print(diff)
+    }else{
+      #print(".....Skipping.....")
+      next  ## skip over all year-year variablility in suppressed data.  Imperfect. 
+    }
+    
+    variations <- c(variations, diff)
+  }
+  
+}
+
+## Take mean of that distribution
+hist(variations)
+mean_year_year_variability <- mean(variations)  
+year_to_year_variability <- var(variations)
+s = mean_year_year_variability / (year_to_year_variability*10) # prior for year-year variability plus and order of magnitude
+a = s * mean_year_year_variability # Moment matching 
+
+```
+
+# A prior on X[1]
+
+```{r}
+## Declare matrix to store x_ic values per town
+town_x_ic <- matrix(nrow = length(towns_to_run), ncol = 2)
+town_x_ic <- as.data.frame(town_x_ic)
+names(town_x_ic) <- c("Location", "x_ic")
+
+
+## Cycle through towns and do a random pull from data model
+for (i in seq_along(towns_to_run)){
+  town_name <- towns_to_run[i]
+  tick_data <- tick_disease
+
+  tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
+  tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year == 2008)
+  
+  is_numeric <- try(as.numeric(tick_disease_tmp$Number))
+  
+  if(!is.na(is_numeric)){
+    obs_ticks <- is_numeric  # Correct for difference in sampling. 
+  }else{
+    obs_ticks <- 2.5 # If no number is provided form 1-5, assume 2.5
+    
+  } 
+  town_x_ic$Location[i] <- town_name
+  if(obs_ticks < 1){ obs_ticks <- 0.1} # rgamma will always return 0's. Is zero, assign small number. 
+  town_x_ic$x_ic[i] <- rgamma(1, obs_ticks, 1/10) 
+ 
+}
+ 
+town_x_ic$x_ic <- town_x_ic$x_ic 
+
+```
+
+
+
+
+## Running the JAGS model
+This is a function that runs the jags model for a given town, and return summary stats. Because a large portion of certain town's data is suppressed for privacy reasons, there are two versions of the JAGS model. 
+
+```{r}
+fit_rate_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 9000, data_list ){
+  
+  less_than_six_indices <- which(tick_data$Number == "<6" )
+  numeric_indices <- which(tick_data$Number != "<6")
+  
+  if (rlang::is_empty(less_than_six_indices)){
+    has_suppressed <- FALSE
+  }
+  
+  data_list$n <- length(tick_data$Year) 
+  data_list$numeric_indices <- numeric_indices
+  data_list$less_than_six_indices <- less_than_six_indices
+
+  
+  ## Check if has suppressed data. If yes, provide flow control 
+  if(rlang::is_empty(less_than_six_indices)){  
+    has_suppressed <- FALSE 
+    }
+ 
+   if(has_suppressed){
+    RandomWalk = "
+  model{
+  
+  #### Data Model
+  for(t in numeric_indices){
+    y[t] ~ dgamma(x[t], observation_error) #I think observation error should be 10 ish
+    rate_cutoff_low[t] <- 0 # Filler value
+    rate_cutoff_high[t] <- 9999 # Filler value
+ }
+ 
+  for(t in less_than_six_indices){   
+    rate_cutoff_low[t] <- ((1/pop[t]) * 100000)
+    rate_cutoff_high[t] <- ((5/pop[t]) * 100000)
+    y[t] ~ dgamma(x[t], observation_error) T(rate_cutoff_low[t], rate_cutoff_high[t])
+  }
+
+  #### Process Model
+  for (i in 2:n){
+    x[i] ~ dnorm(x[i - 1],yearly_variability) T(0, )
+  }
+
+  #### Swap varience for precision
+  yearly_variability <- 1/ (prior_on_yearly_variability)
+  
+
+  #### Priors
+  observation_error ~ dnorm(10, 1/3)
+  ic_var <- 1.824744*2  # add 2 to make prior less certain
+  x[1] ~ dnorm(x_ic, 1/(ic_var))
+  prior_on_yearly_variability ~ dgamma(a, s) # Fit from non cumberland data
+}
+"
+ }else{
+       RandomWalk = "
+model{
+
+ #### Data Model
+  for(t in numeric_indices){
+     y[t] ~ dgamma(x[t], observation_error)
+ }
+
+ #### Process Model
+  for (i in 2:n){
+     x[i] ~ dnorm(x[i - 1],yearly_variability) T(0, )
+  }
+
+
+ #### Swap varience for precision
+  yearly_variability <- 1/(prior_on_yearly_variability)
+
+
+  #### Priors
+  observation_error ~ dnorm(10, 1/3)
+  ic_var <- 1.824744*2  # add less certain prior
+  x[1] ~ dnorm(x_ic, 1/(ic_var))
+  prior_on_yearly_variability ~ dgamma(a, s) # Fit from non cumberland data
+}
+"
+  }
+
+
+## setting  initial conditions
+nchain = 3
+init <- list()
+for(i in 1:nchain){
+  init[[i]] <- list() 
+}
+
+
+j.model   <- jags.model (file = textConnection(RandomWalk),
+                             data = data_list,
+                             #inits = init,
+                             n.chains = 3)
+
+jags.out   <- coda.samples (model = j.model,
+                            variable.names = c( "x"),
+                                n.iter = n.iter)
+
+GBR <- gelman.plot(jags.out)
+burnin <- GBR$last.iter[tail(which(apply(GBR$shrink[,,2]>1.05,1,any)),1)+1] ## Cut burn-in. 
+
+
+if(is.na(burnin)){
+  warning("GBR !< 1.05. Model may have failed to converge")
+  jags.burn <- jags.out
+  did_it_converge <- "convergence_failed_GBR_test" 
+  
+}else{
+  did_it_converge <- "convergence_passed_GBR_test"
+  jags.burn <- window(jags.out,start=burnin, extend = FALSE)
+}
+  print(did_it_converge)
+  print(effectiveSize(jags.burn))
+  #return(jags.burn)
+}
+
+```
+
+
+## Loop over towns in cumberland
+
+```{r}
+
+for (i in seq_along(towns_to_run)){
+  
+ town_name <- towns_to_run[i]
+
+  tick_disease_tmp <- dplyr::filter(tick_disease, tick_disease$Location == town_name & tick_disease$Year > 2008)  
+  
+  tick_disease_tmp <- dplyr::arrange(tick_disease_tmp,  by = tick_disease_tmp$Year) %>% # Make sure model is fitting through time
+                      dplyr::distinct()
+  
+ tick_disease_tmp$Number[tick_disease_tmp$Year > 2016] <- NA # Hold out three years for validation. 
+
+data_list <- list( 
+            a = a, 
+            s = s , 
+            y = tick_disease_tmp$Rate,  
+            x_ic = town_x_ic$x_ic[town_x_ic$Location == town_name] , 
+            pop = as.numeric(tick_disease_tmp$Population)
+            )
+
+print(town_name)
+output <- fit_rate_random_walk(tick_disease_tmp, has_suppressed = TRUE, town_name, n.iter = 9000, data_list )
+}
+
+```
