@@ -59,7 +59,7 @@ for (i in seq_along(towns_in_rest_of_maine)){
 hist(variations)
 mean_year_year_variability <- mean(variations)  
 year_to_year_variability <- var(variations)
-s = mean_year_year_variability / (year_to_year_variability*10) # prior for year-year variability plus and order of magnitude
+s = mean_year_year_variability / (year_to_year_variability) # prior for year-year variability plus and order of magnitude
 a = s * mean_year_year_variability # Moment matching 
 
 ```
@@ -108,6 +108,7 @@ town_x_ic$x_ic <- town_x_ic$x_ic
 
 
 
+## Jags model function
 
 ```{r}
 fit_rate_random_walk <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 91000, data_list ){
@@ -147,7 +148,8 @@ model{
 
   #### Process Model
    for (i in 2:n){
-   x[i] ~ dnorm(x[i - 1],yearly_variability) T(0, )
+   z[i] ~ dnorm(x[i - 1],yearly_variability)
+   x[i] <- max(0.1 , z[i]) # Can't accept zeros
   }
 
    ### Swap varience for precision
@@ -155,7 +157,7 @@ model{
   
 
   #### Priors
-  observation_error ~ dnorm(10, 1/3)
+  observation_error ~ dnorm(10, 1/5)
   ic_var <- 1.824744*2  # add 2 to make prior less certain
   x[1] ~ dnorm(x_ic, 1/(ic_var))
   prior_on_yearly_variability ~ dgamma(a, s) # Fit from non cumberland data
@@ -171,8 +173,9 @@ model{
  }
 
   #### Process Model
-   for (i in 2:n){
-   x[i] ~ dnorm(x[i - 1],yearly_variability) T(0, )
+  for (i in 2:n){
+   z[i] ~ dnorm(x[i - 1],yearly_variability)
+   x[i] <- max(0.0000001 , z[i]) # Can't accept zero
   }
 
   
@@ -181,22 +184,21 @@ model{
   
 
   #### Priors
-  observation_error ~ dnorm(10, 1/3)
-  ic_var <- 1.824744*2  # add less certain prior
+  observation_error ~ dnorm(10, 1/5)
+  ic_var <- 1.824744*2 
   x[1] ~ dnorm(x_ic, 1/(ic_var))
   prior_on_yearly_variability ~ dgamma(a, s) # Fit from non cumberland data
 }
 "
   }
 
-## loading in priors
-#data <- data_list
+
 
 ## setting  initial conditions
 nchain = 3
 init <- list()
 for(i in 1:nchain){
-  init[[i]] <- list() # Maybe check  these 
+  init[[i]] <- list() 
 }
 
 
@@ -212,9 +214,6 @@ jags.out   <- coda.samples (model = j.model,
 GBR <- gelman.plot(jags.out)
 burnin <- GBR$last.iter[tail(which(apply(GBR$shrink[,,2]>1.05,1,any)),1)+1] ## Cut our burn-in. 
 
-## Not failing when lack of convergence. Known possible failures to converge: "Pownal", "Frye_Island", "Harrison", "Baldwin"
-#Known passes: "Harpswell", "Freeport", "Brunswick", "Yarmouth", "Cumberland", Falmouth",  South_Portland, "Gray", "North_Yarmouth", "Raymond", "Naples", "Casco"
-# Rerun for better estimates : Portland "Chebeague_Island" "Standish", "Cape_Elizabeth", "Scarborough","Long_Island", "Gorham" , "New_Gloucester"
 if(is.na(burnin)){
   warning("GBR !< 1.05. Model may have failed to converge")
   jags.burn <- jags.out
@@ -224,9 +223,9 @@ if(is.na(burnin)){
   did_it_converge <- "convergence_passed_GBR_test"
   jags.burn <- window(jags.out,start=burnin, extend = FALSE)
 }
-  date_stamp <- Sys.time()
-  date_stamp <- format(date_stamp, "%Y%m%d")
-  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "binomial_null",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
+  #date_stamp <- Sys.time()
+  #date_stamp <- format(date_stamp, "%Y%m%d")
+  #file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "rate_random_walk",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
   print(did_it_converge)
   print(effectiveSize(jags.burn))
   #save(jags.burn, file = file_name )

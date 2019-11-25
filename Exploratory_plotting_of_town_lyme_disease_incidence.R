@@ -5,11 +5,11 @@ tick_disease_big <- read.csv("town_level_data_lyme.csv", header = TRUE, stringsA
 
 tick_disease_big$Population <- gsub(pattern = ",", replacement = "", tick_disease_big$Population)
 
-towns_in_cumberland <- c("Harpswell", "Freeport", "Brunswick", "Pownal", "Frye_Island", "Yarmouth", 
+towns_in_cumberland <- c("Harpswell", "Freeport", "Brunswick", "Pownal",  "Yarmouth", 
                          "Cumberland", "Standish", "Chebeague_Island", "Portland", "Falmouth", "South_Portland", 
                          "Cape_Elizabeth", "Long_Island", "Scarborough", "Harrison", "Gray", "North_Yarmouth", 
                          "Baldwin", "Bridgton", "Casco", "Raymond", "Naples", "Sebago", "Windham", "Gorham",
-                         "Westbrook", "New_Gloucester")
+                         "Westbrook", "New_Gloucester") # "Frye_Island",
 unique(tick_disease_big$Number)
 
 towns_for_validation <- c("Bridgton","Sebago",  "Westbrook")
