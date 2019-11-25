@@ -135,8 +135,8 @@ model{
   
   #### Data Model
   for(t in numeric_indices){
-   q[t] <- x[t]/rate_of_underreporting
-   y[t] ~ dnorm(q[t], observation_error) T(0,)
+
+   y[t] ~ dnorm(x[t], 1/observation_error) T(0,)
    rate_cutoff_low[t] <- 0 # Filler value
    rate_cutoff_high[t] <- 9999 # Filler value
  }
@@ -144,9 +144,7 @@ model{
   for(t in less_than_six_indices){   
    rate_cutoff_low[t] <- ((1/pop[t]) * 100000)
    rate_cutoff_high[t] <- ((5/pop[t]) * 100000)
-
-   q[t] <- x[t]/rate_of_underreporting
-   y[t] ~ dnorm(q[t], 1/observation_error) T(rate_cutoff_low[t], rate_cutoff_high[t])
+   y[t] ~ dnorm(x[t], 1/observation_error) T(rate_cutoff_low[t], rate_cutoff_high[t])
   }
 
   #### Process Model
@@ -160,8 +158,8 @@ model{
   
 
   #### Priors
-  observation_error ~ dnorm(10, 1/5)
-  rate_of_underreporting ~ dgamma(a_under, s_under)
+  observation_error ~ dnorm(10, 1/6)
+  #rate_of_underreporting ~ dgamma(a_under, s_under)
   ic_var <- 1.824744*2  # add 2 to make prior less certain
   x[1] ~ dnorm(x_ic, 1/(ic_var))
   prior_on_yearly_variability ~ dgamma(a, s) # Fit from non cumberland data
@@ -173,8 +171,8 @@ model{
   
   #### Data Model
   for(t in numeric_indices){
-   q[t] <- x[t]/rate_of_underreporting
-   y[t] ~ dnorm(q[t], 1/observation_error) T(0,) 
+   
+   y[t] ~ dnorm(x[t], 1/observation_error) T(0,) 
  }
 
   #### Process Model
@@ -189,8 +187,8 @@ model{
   
 
   #### Priors
-  observation_error ~ dnorm(10, 1/3)
-  rate_of_underreporting ~ dgamma(a_under, s_under)
+  observation_error ~ dnorm(10, 1/6)
+  #rate_of_underreporting ~ dgamma(a_under, s_under)
   ic_var <- 1.824744*2 
   x[1] ~ dnorm(x_ic, 1/(ic_var))
   prior_on_yearly_variability ~ dgamma(a, s) # Fit from non cumberland data
@@ -214,7 +212,7 @@ j.model   <- jags.model (file = textConnection(RandomWalk),
                              n.chains = 3)
 
 jags.out   <- coda.samples (model = j.model,
-                            variable.names = c( "x", "detection_rate", "probability"),
+                            variable.names = c( "x", "observation_error", "yearly_variability" ),
                                 n.iter = n.iter)
 
 GBR <- gelman.plot(jags.out)
