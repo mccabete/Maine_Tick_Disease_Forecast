@@ -135,7 +135,8 @@ model{
   
   #### Data Model
   for(t in numeric_indices){
-   y[t] ~ dgamma(x[t], observation_error) #I think observation error should be 10 ish
+   q[t] <- x[t]/rate_of_underreporting
+   y[t] ~ dnorm(q[t], observation_error) T(0,)
    rate_cutoff_low[t] <- 0 # Filler value
    rate_cutoff_high[t] <- 9999 # Filler value
  }
@@ -143,13 +144,15 @@ model{
   for(t in less_than_six_indices){   
    rate_cutoff_low[t] <- ((1/pop[t]) * 100000)
    rate_cutoff_high[t] <- ((5/pop[t]) * 100000)
-   y[t] ~ dgamma(x[t], observation_error) T(rate_cutoff_low[t], rate_cutoff_high[t])
+
+   q[t] <- x[t]/rate_of_underreporting
+   y[t] ~ dnorm(q[t], 1/observation_error) T(rate_cutoff_low[t], rate_cutoff_high[t])
   }
 
   #### Process Model
    for (i in 2:n){
    z[i] ~ dnorm(x[i - 1],yearly_variability)
-   x[i] <- max(0.1 , z[i]) # Can't accept zeros
+   x[i] <- max(0.0000001 , z[i]) # Can't accept zeros
   }
 
    ### Swap varience for precision
@@ -158,6 +161,7 @@ model{
 
   #### Priors
   observation_error ~ dnorm(10, 1/5)
+  rate_of_underreporting ~ dgamma(a_under, s_under)
   ic_var <- 1.824744*2  # add 2 to make prior less certain
   x[1] ~ dnorm(x_ic, 1/(ic_var))
   prior_on_yearly_variability ~ dgamma(a, s) # Fit from non cumberland data
@@ -169,7 +173,8 @@ model{
   
   #### Data Model
   for(t in numeric_indices){
-   y[t] ~ dgamma(x[t], observation_error)
+   q[t] <- x[t]/rate_of_underreporting
+   y[t] ~ dnorm(q[t], 1/observation_error) T(0,) 
  }
 
   #### Process Model
@@ -184,7 +189,8 @@ model{
   
 
   #### Priors
-  observation_error ~ dnorm(10, 1/5)
+  observation_error ~ dnorm(10, 1/3)
+  rate_of_underreporting ~ dgamma(a_under, s_under)
   ic_var <- 1.824744*2 
   x[1] ~ dnorm(x_ic, 1/(ic_var))
   prior_on_yearly_variability ~ dgamma(a, s) # Fit from non cumberland data
@@ -250,9 +256,12 @@ for (i in seq_along(towns_to_run)){
   tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year) %>%
                        dplyr::distinct()# Make sure model is fitting through time
   
- 
+ s_under = 10 / (2) # prior for year-year variability plus and order of magnitude
+a_under = s_under * 10 # Moment matching 
 
 data_list <- list( 
+            s_under = (10 / 2), 
+            a_under = (s_under * 10), 
             n = 7, 
             a = a, 
             s = s , 
