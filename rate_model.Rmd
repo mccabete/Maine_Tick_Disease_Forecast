@@ -97,8 +97,9 @@ for (i in seq_along(towns_to_run)){
     
   } 
   town_x_ic$Location[i] <- town_name
-  if(obs_ticks < 1){ obs_ticks <- 0.1} # rgamma will always return 0's. Is zero, assign small number. 
-  town_x_ic$x_ic[i] <- rgamma(1, obs_ticks, 1/10) 
+  if(obs_ticks < 1){ obs_ticks <- 0.1} 
+  obs_ticks <- obs_ticks*10
+  town_x_ic$x_ic[i] <- rnorm(1, obs_ticks, 6) #
  
 }
  
