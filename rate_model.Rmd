@@ -98,7 +98,7 @@ for (i in seq_along(towns_to_run)){
   } 
   town_x_ic$Location[i] <- town_name
   if(obs_ticks < 1){ obs_ticks <- 0.1} # rgamma will always return 0's. Is zero, assign small number. 
-  town_x_ic$x_ic[i] <- rgamma(1, obs_ticks, 1/10) 
+  town_x_ic$x_ic[i] <- rgamma(1, obs_ticks, 1/10)# Need to redo for normal data model. 
  
 }
  
@@ -158,7 +158,7 @@ model{
   
 
   #### Priors
-  observation_error ~ dnorm(10, 1/6)
+  observation_error ~ dnorm(10, 1/10)
   #rate_of_underreporting ~ dgamma(a_under, s_under)
   ic_var <- 1.824744*2  # add 2 to make prior less certain
   x[1] ~ dnorm(x_ic, 1/(ic_var))
@@ -187,7 +187,7 @@ model{
   
 
   #### Priors
-  observation_error ~ dnorm(10, 1/6)
+  observation_error ~ dnorm(10, 1/10)
   #rate_of_underreporting ~ dgamma(a_under, s_under)
   ic_var <- 1.824744*2 
   x[1] ~ dnorm(x_ic, 1/(ic_var))
@@ -227,12 +227,12 @@ if(is.na(burnin)){
   did_it_converge <- "convergence_passed_GBR_test"
   jags.burn <- window(jags.out,start=burnin, extend = FALSE)
 }
-  #date_stamp <- Sys.time()
-  #date_stamp <- format(date_stamp, "%Y%m%d")
-  #file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "rate_random_walk",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
+  date_stamp <- Sys.time()
+  date_stamp <- format(date_stamp, "%Y%m%d")
+  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "rate_random_walk",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
   print(did_it_converge)
   print(effectiveSize(jags.burn))
-  #save(jags.burn, file = file_name )
+  save(jags.burn, file = file_name )
   return(jags.burn)
 }
 ```
@@ -269,7 +269,7 @@ data_list <- list(
             )
 
 print(town_name)
-output <- fit_rate_random_walk(tick_disease_tmp, has_suppressed = TRUE, town_name, n.iter = 9000, data_list )
+output <- fit_rate_random_walk(tick_disease_tmp, has_suppressed = TRUE, town_name, n.iter = 100000, data_list )
   
 }
 
