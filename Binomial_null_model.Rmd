@@ -95,7 +95,7 @@ model{
   }
 
   ## Prior
-  probability ~ dbeta(1,1) #uniform probability
+  probability ~ dbeta(prob_a,prob_b) #uniform probability
   
   #### Priors
   detection_rate ~ dbeta(a_obs,b_obs) 

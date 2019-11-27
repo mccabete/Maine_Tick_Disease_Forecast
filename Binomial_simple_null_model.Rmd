@@ -1,0 +1,236 @@
+---
+title: "Binomial_simple_null_model"
+author: "Tempest McCabe"
+date: "11/27/2019"
+output: html_document
+---
+
+
+This model is an attempt to scale down the number of paramters of the binomial null model an reduce complexity. 
+
+```{r}
+library(rjags)
+library(coda)
+library(ggplot2)
+library(dplyr)
+```
+
+## A Binomial null model
+
+ modeling the incidence of lyme in a town as a fucntion of population of that town. We say that each per-year-person has some probability of contracting lyme disease. 
+
+## Developing a prior for probability of infection
+
+I go thorugh and I look at the rates of infection fro previous non-used years. 
+
+
+```{r}
+## Declare matrix to store x_ic values per town
+town_x_ic <- matrix(nrow = length(towns_to_run), ncol = 4)
+town_x_ic <- as.data.frame(town_x_ic)
+names(town_x_ic) <- c("Location", "x_ic", "prob_a", "prob_b")
+
+
+
+## Cycle through towns and do a random pull from data model
+ 
+
+for (i in seq_along(towns_to_run)){
+  town_name <- towns_to_run[i]
+  tick_data <- tick_disease
+
+  tick_disease_tmp <- tick_data[(tick_data$Location == town_name ),] 
+  tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year == 2008)
+  
+  is_numeric <- try(as.numeric(tick_disease_tmp$Number))
+  
+  if(!is.na(is_numeric)){
+    obs_ticks <- is_numeric  # Correct for difference in sampling. 
+  }else{
+    obs_ticks <- 2
+    
+  } 
+  town_x_ic$Location[i] <- town_name
+  if(obs_ticks < 1){ obs_ticks <- 0.1} # Multiplying 0 by 0 will still be zero. Putting small number. 
+  
+  town_x_ic$x_ic[i] <- obs_ticks/ as.numeric(tick_disease_tmp$Population)
+ 
+}
+
+
+### Cycle through and find the parameters for a beta distr based on previous year's probability of infection. 
+
+estBetaParams <- function(mu, var) {
+  alpha <- ((1 - mu) / var - 1 / mu) * mu ^ 2
+  beta <- alpha * (1 / mu - 1)
+  return(params = list(alpha = alpha, beta = beta))
+}
+
+for ( i in seq_along(towns_to_run)){
+  
+  params <- estBetaParams(town_x_ic$x_ic[i],town_x_ic$x_ic[i]/1.05 ) #Results in about an order-of-magnitude variability
+  
+  town_x_ic$prob_a[i] <- params$alpha
+   town_x_ic$prob_b[i] <- params$beta
+}
+```
+
+
+
+### Running the simple model
+
+```{r}
+fit_binomial_null <- function(tick_data, has_suppressed = TRUE, town_name, n.iter = 91000, data_list, init_detection_rate,init_ic ){
+  
+  tick_data <- dplyr::arrange(tick_data, by = tick_data$Year) # Make sure to be going in order of year
+   
+  
+  less_than_six_indices <- which(tick_data$Number == "<6" )
+  numeric_indices <- which(tick_data$Number != "<6")
+  
+  data_list$n <- length(tick_data$Year) 
+  data_list$numeric_indices <- numeric_indices
+  data_list$less_than_six_indices <- less_than_six_indices
+  
+  
+  ## Check if has suppressed data. If yes, provide flow control
+  if (rlang::is_empty(less_than_six_indices)){
+   has_suppressed <- FALSE
+  }
+  
+  if(has_suppressed){
+    RandomWalk = "
+model{
+  
+
+  #### Process Model
+   for (i in 2:n){
+   
+    probability[i] <- probability[i - 1] + yearly_error
+     dummy[i] <- max(probability[i], 1.622593e-05) 
+    y[i] ~ dbinom(dummy[i], pop[i]) T(1,5)
+  }
+
+  ## Prior
+  probability[1] ~ dbeta(prob_a,prob_b) #uniform probability
+  yearly_error ~ dnorm(mean_error, 1/var_error)
+}
+"
+  }else{
+        RandomWalk = "
+model{
+  
+  #### Data Model
+
+  #### Process Model
+   for (i in 2:n){
+    
+    probability[i]<- probability[i - 1] + yearly_error # Watch out for numeric errors
+    dummy[i] <- max(probability[i], 1.622593e-05) 
+    y[i] ~ dbinom(dummy[i], pop[i])
+  }
+
+  #### Priors
+  probability[1] ~ dbeta(prob_a,prob_b) 
+  yearly_error ~ dnorm(mean_error, 1/var_error)
+}
+"
+  }
+
+## loading in priors
+#data <- data_list
+
+## setting  initial conditions
+nchain = 3
+init <- list()
+for(i in 1:nchain){
+  init[[i]] <- list() # from 2018 Maine rate of lyme # probability[1:10] <- rep(0.001324, 10) https://www.maine.gov/dhhs/reports/2018/Lyme-and-Other-Tickborn-Illnesses-2018-Report.pdf
+}
+
+
+j.model   <- jags.model (file = textConnection(RandomWalk),
+                             data = data_list,
+                             #inits = init,
+                             n.chains = 3)
+
+jags.out   <- coda.samples (model = j.model,
+                            variable.names = c( "probability"),
+                                n.iter = n.iter)
+
+GBR <- gelman.plot(jags.out)
+burnin <- GBR$last.iter[tail(which(apply(GBR$shrink[,,2]>1.05,1,any)),1)+1] ## Cut our burn-in. 
+
+
+if(is.na(burnin)){
+  warning("GBR !< 1.05. Model may have failed to converge")
+  jags.burn <- jags.out
+  did_it_converge <- "convergence_failed_GBR_test" 
+  
+}else{
+  did_it_converge <- "convergence_passed_GBR_test"
+  jags.burn <- window(jags.out,start=burnin, extend = FALSE)
+}
+  date_stamp <- Sys.time()
+  date_stamp <- format(date_stamp, "%Y%m%d")
+  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "binomial_simple",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
+  print(did_it_converge)
+  print(effectiveSize(jags.burn))
+  save(jags.burn, file = file_name )
+  return(jags.burn)
+}
+```
+
+
+## Looping over every town in cumberland 
+
+note: Frye_Island is failing to converge, becuase a special case of data. Long_Island also failing to converge.  
+```{r}
+for (i in seq_along(towns_to_run)){
+  
+ town_name <- towns_to_run[i]
+
+tick_disease_tmp <- tick_disease[(tick_disease$Location == town_name ),] 
+tick_disease_tmp <- dplyr::filter(tick_disease_tmp, tick_disease_tmp$Year > 2008) # Used 2008 as prior on system
+tick_disease_tmp$Number[tick_disease_tmp$Year > 2016] <- NA # Hold out three years for validation. 
+tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year) %>%
+                       dplyr::distinct()# Make sure model is fitting through time
+
+data_list <- list(y = tick_disease_tmp$Number, 
+                  prob_a = town_x_ic$prob_a[town_x_ic$Location == town_name] ,
+                  prob_b = town_x_ic$prob_b[town_x_ic$Location == town_name],
+                  mean_error = mean(town_x_ic$x_ic)/9, 
+                  var_error = 0.0003, 
+                  pop = as.numeric(tick_disease_tmp$Population))
+
+print(town_name)
+output <- fit_binomial_null(tick_data, has_suppressed = TRUE, town_name, n.iter = 1000, data_list)
+  
+}
+
+```
+
+# Lit review for error rates in lyme reporting
+
+*National Estimates of Errors*
+
+Some national error estimates include [this paper](https://academic.oup.com/cid/article/59/5/676/2895755) by Hinckley et al, which estimates the "true" number of infections in 2008 based on the number of specimines sent into labs, and correcting for false positives and false negatives. It does not estimate the number of incidences where the tick itself was not sent in for testing, but says this could add to the number. 
+
+[This CDC summary](https://www.cdc.gov/mmwr/volumes/66/ss/ss6622a1.htm?s_cid=ss6622a1_w) of the 2008-2015 data notes that tick disease rates are underreported in high-incidence areas but possibly over-reported in low-incidence areas.
+  Starting in 2008, the CDC explicitly notes the difference between confirmed cases and probable cases. This difference could be used to estimate some of the error, but is also likely an underestimate because the definition of "probable case" still involves some positive lab results/ medical diagnosis. 
+
+[This estimate](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4550147/) of 2005-2010 national incidence rate useing health insurence claims also argues for large numbers of underreporting. 
+
+[This review](https://www-sciencedirect-com.ezproxy.bu.edu/science/article/pii/S0891552015000240?via%3Dihub) as well as being a thourough general review of lyme in the united states, summerizes some of the liturature attemting to estimate the amount of underreporting in lyme disease, putting it aproximatly 3-12 fold differences. The studies were state/ town specific but the techniqes used were: 
+ - In Westchestesr New York a "determinisitc model with plausible ranges" [was used](https://academic.oup.com/aje/article/148/10/1018/135572) to estimate "true" incidence levels. 
+ - Connecticut Physicians [were surveyed](https://europepmc.org/abstract/med/10186700).
+ - Maryland Physicians [were surveyed](https://doi.org/10.1093/infdis/173.5.1260)
+ -  Medical records in Wisconsin [were reviewd](https://academic.oup.com/aje/article/155/12/1120/123221)
+ 
+*Maine Estimates of errors*
+
+[There are 2011-2016 estimates of prevelance](https://data.mainepublichealth.gov/tracking/metadata-lyme-prevalence) by town in Maine. Because Prevelance = Incidence x Average duration of disease, we may be able to compare our estimates to prevelance data as measured by the survey. However, prevelance is estimated by the question "Have you ever been told by a doctor, nurse, or other health professional that you have Lyme disease?”. This question does not capture populations that would not have intereacted with medical profesionals. However, it could be a cool benchmark on the state/ on the error assosiated with individuals who do intereact with medical profesionals, but who's disease does not meet the criteria of either probable or confirmed. 
+
+*Other Maine data to use*
+[Deer ticks sent in for testing 1989-2013](https://data.mainepublichealth.gov/tracking/metadata-tickborne-ticks)
+
+[Emergency room visits related to tick bites 2017, 2018, to date 2019](https://data.mainepublichealth.gov/tracking/metadata-tickborne-near-real-time-tick-exposure)
