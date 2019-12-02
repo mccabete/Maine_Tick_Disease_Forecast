@@ -218,10 +218,10 @@ if(is.na(burnin)){
 }
   date_stamp <- Sys.time()
   date_stamp <- format(date_stamp, "%Y%m%d")
-  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "binomial_simple_trash",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
+  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "binomial_simple",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
   print(did_it_converge)
   print(effectiveSize(jags.burn))
-  #save(jags.burn, file = file_name )
+  save(jags.burn, file = file_name )
   return(jags.burn)
 }
 ```
@@ -232,7 +232,7 @@ if(is.na(burnin)){
 note: Frye_Island is failing to converge, becuase a special case of data. Long_Island also failing to converge.  
 ```{r}
 for (i in seq_along(towns_to_run)){
- i = 8
+ #i = 8
  town_name <- towns_to_run[i]
  
 

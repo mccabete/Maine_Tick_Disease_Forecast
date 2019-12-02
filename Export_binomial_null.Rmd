@@ -75,31 +75,45 @@ plotable <- matrix(NA, ncol = 3, nrow = 9)
 plotable <- as.data.frame(plotable)
 names(plotable) <- c("year", "rate", "sd")
 
+
+
   
 for(i in seq_along(towns_with_jags_output)){
   
   file_path <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", file_names[i], sep = "")
   load(file_path)
   matrix <- as.matrix(jags.burn)
-  sub_matrix <- matrix
-  plotable$year <- 2009:2017
-  plotable$rate <- apply(sub_matrix, 2, mean)
-  #plotable$ <- 
+  #plotable$year <- 2008:2018
+  #plotable$rate <- apply(sub_matrix, 2, mean)
+
   tick_data  <- tick_disease[(tick_disease$Location == towns_with_jags_output[i] ),] 
+  
+  prob_samples <- matrix(NA, ncol = 11, nrow = length(matrix[,i]))
+  for (k in seq_along( tick_data$Year)){
+   paste("K is ", k)
+  for (j in seq_along(matrix[,k])){
+    paste("J is ", j)
+    prob_samples[j,k] <- rbinom(1, as.numeric(tick_data$Population[i]), matrix[j,k])
+  }
+  }
+  
+  #sub_matrix <- matrix
+  
  
-  tick_data <- dplyr::filter(tick_data, (tick_data$Year) > 2008 & (tick_data$Year < 2018)) #
+  #tick_data <- dplyr::filter(tick_data, (tick_data$Year) > 2008 & (tick_data$Year < 2018)) #
   tick_data <- dplyr::arrange(tick_data, by = tick_data$Year) # Make sure model is fitting through time
   
   y <- as.numeric(tick_data$Number)
-  years <- as.character(c(2009:2017))
+  years <- as.character(c(2008:2018))
   
-ci <- apply(sub_matrix,2,quantile,c(0.025,0.5,0.975))
+ci <- apply(prob_samples,2,quantile,c(0.025,0.5,0.975))
 plot(years,ci[2,],type='n',ylim=range(ci),ylab="Number of Lyme cases")
 ecoforecastR::ciEnvelope(years,ci[1,],ci[3,],col="lightBlue")
+lines(years,ci[2,],ylim=range(ci))
 points(years,y,pch="+",cex=1)
 title(towns_with_jags_output[i])
 
-colnames(ci) <-c(2009:2017)
+colnames(ci) <-c(2008:2018)
 
 #file_path_export <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/modeled_output/", towns_with_jags_output[i], "_confidence_interval_binomial_null_ouput.csv", sep = "")
 #write.csv(ci, file = file_path_export)
