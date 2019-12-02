@@ -75,7 +75,7 @@ for ( i in seq_along(towns_to_run)){
   # town_x_ic$prob_b[i] <- params$beta
   
   ### Using an exponential distribution
-  town_x_ic$rate <- 1/town_x_ic$x_ic[i]
+  town_x_ic$rate[i] <- 1/town_x_ic$x_ic[i]
   
 }
 ```
