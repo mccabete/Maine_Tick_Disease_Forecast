@@ -26,9 +26,9 @@ I go thorugh and I look at the rates of infection fro previous non-used years.
 
 ```{r}
 ## Declare matrix to store x_ic values per town
-town_x_ic <- matrix(nrow = length(towns_to_run), ncol = 4)
+town_x_ic <- matrix(nrow = length(towns_to_run), ncol = 5)
 town_x_ic <- as.data.frame(town_x_ic)
-names(town_x_ic) <- c("Location", "x_ic", "prob_a", "prob_b")
+names(town_x_ic) <- c("Location", "x_ic", "prob_a", "prob_b", "rate")
 
 
 
@@ -68,10 +68,15 @@ estBetaParams <- function(mu, var) {
 
 for ( i in seq_along(towns_to_run)){
   
-  params <- estBetaParams(town_x_ic$x_ic[i],town_x_ic$x_ic[i]/1.05 ) #Results in about an order-of-magnitude variability
+  ### Using a beta distribution
+  #params <- estBetaParams(town_x_ic$x_ic[i],town_x_ic$x_ic[i]/1.05 ) #Results in about an order-of-magnitude variability
   
-  town_x_ic$prob_a[i] <- params$alpha
-   town_x_ic$prob_b[i] <- params$beta
+  #town_x_ic$prob_a[i] <- params$alpha
+  # town_x_ic$prob_b[i] <- params$beta
+  
+  ### Using an exponential distribution
+  town_x_ic$rate <- 1/town_x_ic$x_ic[i]
+  
 }
 ```
 
@@ -112,7 +117,7 @@ model{
   }
 
   ## Prior
-  probability[1] ~ dbeta(prob_a,prob_b) #uniform probability
+  probability[1] ~ dexp(rate) #uniform probability
   yearly_error ~ dnorm(mean_error, 1/var_error)
 }
 "
@@ -125,13 +130,13 @@ model{
   #### Process Model
    for (i in 2:n){
     
-    probability[i]<- probability[i - 1] + yearly_error # Watch out for numeric errors
-    dummy[i] <- max(probability[i], 1.622593e-05) 
+    probability[i] <- probability[i - 1] + yearly_error # Watch out for numeric errors
+    dummy[i] <- max(probability[i], 1.622593e-05) # probability can get very small but can't go negative or to zero
     y[i] ~ dbinom(dummy[i], pop[i])
   }
 
   #### Priors
-  probability[1] ~ dbeta(prob_a,prob_b) 
+  probability[1] ~ dexp(rate) 
   yearly_error ~ dnorm(mean_error, 1/var_error)
 }
 "
@@ -196,14 +201,15 @@ tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year)
                        dplyr::distinct()# Make sure model is fitting through time
 
 data_list <- list(y = tick_disease_tmp$Number, 
-                  prob_a = town_x_ic$prob_a[town_x_ic$Location == town_name] ,
-                  prob_b = town_x_ic$prob_b[town_x_ic$Location == town_name],
+                  #prob_a = town_x_ic$prob_a[town_x_ic$Location == town_name] ,
+                  #prob_b = town_x_ic$prob_b[town_x_ic$Location == town_name],
+                  rate = town_x_ic$rate[town_x_ic$Location == town_name],
                   mean_error = mean(town_x_ic$x_ic)/9, 
                   var_error = 0.0003, 
                   pop = as.numeric(tick_disease_tmp$Population))
 
 print(town_name)
-output <- fit_binomial_null(tick_data, has_suppressed = TRUE, town_name, n.iter = 1000, data_list)
+output <- fit_binomial_null(tick_data = tick_disease_tmp, has_suppressed = TRUE, town_name, n.iter = 1000, data_list)
   
 }
 
