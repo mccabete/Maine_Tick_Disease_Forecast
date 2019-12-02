@@ -8,9 +8,9 @@ output: html_document
 ## Read in data
 ```{r}
 towns_with_jags_output <- list.files("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/")
-towns_with_jags_output <- towns_with_jags_output[grep("20191125.rate_random_walk.", towns_with_jags_output)]
+towns_with_jags_output <- towns_with_jags_output[grep("20191202.binomial_simple.", towns_with_jags_output)]
 file_names <- towns_with_jags_output
-towns_with_jags_output <- gsub("20191125.rate_random_walk.", "", towns_with_jags_output)
+towns_with_jags_output <- gsub("20191202.binomial_simple.", "", towns_with_jags_output)
 towns_with_jags_output <- gsub(".convergence_passed_GBR_test.JAGS_run.Rdata", "", towns_with_jags_output)
                 
 failed_to_converge <- grep("failed", towns_with_jags_output)
@@ -71,7 +71,7 @@ write.csv(output, file = "/Users/tess/Documents/work/Maine_Tick_Disease_Forecast
 library(ggplot2)
 #devtools::install_github("EcoForecast/ecoforecastR")
 
-plotable <- matrix(NA, ncol = 3, nrow = 10) 
+plotable <- matrix(NA, ncol = 3, nrow = 9) 
 plotable <- as.data.frame(plotable)
 names(plotable) <- c("year", "rate", "sd")
 
@@ -81,17 +81,17 @@ for(i in seq_along(towns_with_jags_output)){
   file_path <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", file_names[i], sep = "")
   load(file_path)
   matrix <- as.matrix(jags.burn)
-  sub_matrix <- matrix[,-c(1, 12)]
-  plotable$year <- 2009:2018
+  sub_matrix <- matrix
+  plotable$year <- 2009:2017
   plotable$rate <- apply(sub_matrix, 2, mean)
   #plotable$ <- 
   tick_data  <- tick_disease[(tick_disease$Location == towns_with_jags_output[i] ),] 
  
-  tick_data <- dplyr::filter(tick_data, tick_data$Year > 2008) #
+  tick_data <- dplyr::filter(tick_data, (tick_data$Year) > 2008 & (tick_data$Year < 2018)) #
   tick_data <- dplyr::arrange(tick_data, by = tick_data$Year) # Make sure model is fitting through time
   
-  y <- as.numeric(tick_data$Rate)
-  years <- as.character(c(2009:2018))
+  y <- as.numeric(tick_data$Number)
+  years <- as.character(c(2009:2017))
   
 ci <- apply(sub_matrix,2,quantile,c(0.025,0.5,0.975))
 plot(years,ci[2,],type='n',ylim=range(ci),ylab="Number of Lyme cases")
@@ -99,7 +99,7 @@ ecoforecastR::ciEnvelope(years,ci[1,],ci[3,],col="lightBlue")
 points(years,y,pch="+",cex=1)
 title(towns_with_jags_output[i])
 
-colnames(ci) <-c(2009:2018)
+colnames(ci) <-c(2009:2017)
 
 #file_path_export <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/modeled_output/", towns_with_jags_output[i], "_confidence_interval_binomial_null_ouput.csv", sep = "")
 #write.csv(ci, file = file_path_export)
