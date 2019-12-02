@@ -99,7 +99,7 @@ estBetaParams <- function(mu, var) {
 
 for ( i in seq_along(towns_to_run)){
   
-  params <- estBetaParams(town_x_ic$x_ic[i],town_x_ic$x_ic[i]/1.05 ) #Results in about an order-of-magnitude variability
+  params <- estBetaParams(town_x_ic$x_ic[i],town_x_ic$x_ic[i]/1.01 ) #Results in about an order-of-magnitude variability
   
   town_x_ic$prob_a[i] <- params$alpha
    town_x_ic$prob_b[i] <- params$beta
@@ -213,10 +213,10 @@ if(is.na(burnin)){
 }
   date_stamp <- Sys.time()
   date_stamp <- format(date_stamp, "%Y%m%d")
-  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "binomial_null",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
+  file_name <- paste("/Users/tess/Documents/work/Maine_Tick_Disease_Forecast/Jags_output/", date_stamp, ".", "binomial_null_with_prior",".",town_name,".", did_it_converge, ".","JAGS_run.Rdata", sep = "")
   print(did_it_converge)
   print(effectiveSize(jags.burn))
-  #save(jags.burn, file = file_name )
+  save(jags.burn, file = file_name )
   return(jags.burn)
 }
 ```
@@ -226,15 +226,17 @@ if(is.na(burnin)){
 
 note: Frye_Island is failing to converge, becuase a special case of data. Long_Island also failing to converge.  
 ```{r}
-# Special children, failed to converge for maybe structural reasons: c("Pownal", "Harrison", "Baldwin")
-## Converged: "Portland",  "Standish", "Cape_Elizabeth", "Scarborough", "Gorham", "New_Gloucester"
-## Still more : "Chebeague_Island", "Long_Island" 
-#towns_to_run <- c("Chebeague_Island", "Long_Island") # no Frye_Island because NA in data
-#"Baldwin" run
-# Need to run with larger size "Harrison", "Bridgton"
-#towns_to_run <- c("Westbrook", "Pownal" ) #Pownal might need longer to converge
+
+# probability at infinate density "Chebeague_Island",
+# Error in node probability Invalid parent values "Long_Island"
+# Also got at " Error in node probability Slicer stuck at value with infinite density" for "Freeport"
 
 
+towns_to_run <-  c("Harpswell", "Freeport", "Brunswick", "Pownal",  "Yarmouth", 
+                         "Cumberland", "Standish",  "Portland", "Falmouth", "South_Portland", 
+                         "Cape_Elizabeth",  "Scarborough", "Harrison", "Gray", "North_Yarmouth", 
+                         "Baldwin", "Bridgton", "Casco", "Raymond", "Naples", "Sebago", "Windham", "Gorham",
+                         "Westbrook", "New_Gloucester") # "Frye_Island",
 
 
 for (i in seq_along(towns_to_run)){
@@ -259,7 +261,7 @@ data_list <- list( n = 7,
                    pop = as.numeric(tick_disease_tmp$Population))
 
 print(town_name)
-output <- fit_binomial_null(tick_data, has_suppressed = TRUE, town_name, n.iter = 1000, data_list, init_detection_rate = 0.9, init_ic = as.numeric(tick_data$Number[1]) )
+output <- fit_binomial_null(tick_data, has_suppressed = TRUE, town_name, n.iter = 199000, data_list, init_detection_rate = 0.9, init_ic = as.numeric(tick_data$Number[1]) )
   
 }
 
