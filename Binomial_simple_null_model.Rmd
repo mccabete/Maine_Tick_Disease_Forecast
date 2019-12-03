@@ -118,13 +118,13 @@ model{
   #### Process Model
    for( i in less_than_six_indices){
     dummy[i] <- probability[i - 1] + yearly_error 
-    probability[i] <- max(dummy[i], 1.622593e-10) 
+    probability[i] <- max(dummy[i], 1.622593e-5) 
     y[i] ~ dbinom(probability[i], pop[i]) T(1,5)
    }
    
   for( i in na_indices){
     dummy[i] <- probability[i - 1] + yearly_error 
-    probability[i] <- max(dummy[i], 1.622593e-10) 
+    probability[i] <- max(dummy[i], 1.622593e-5) 
     y[i] ~ dbinom(probability[i], pop[i]) T(1,5)
    }
     
@@ -145,13 +145,13 @@ model{
 
    for(i in numeric_indices){
      dummy[i] <- probability[i - 1] + yearly_error 
-    probability[i] <- max(dummy[i], 1.622593e-10) 
+    probability[i] <- max(dummy[i], 1.622593e-5) 
     y[i] ~ dbinom(probability[i], pop[i])
    }
 
    for( i in less_than_six_indices){
     dummy[i] <- probability[i - 1] + yearly_error 
-    probability[i] <- max(dummy[i], 1.622593e-10) 
+    probability[i] <- max(dummy[i], 1.622593e-5) 
     y[i] ~ dbinom(probability[i], pop[i]) T(1,5)
    }
     
@@ -231,6 +231,7 @@ if(is.na(burnin)){
 
 note: Frye_Island is failing to converge, becuase a special case of data. Long_Island also failing to converge.  
 ```{r}
+towns_to_run <- c("Windham",  "Gorham" , "New_Gloucester"  )
 for (i in seq_along(towns_to_run)){
  #i = 8
  town_name <- towns_to_run[i]
@@ -263,14 +264,14 @@ output <- fit_binomial_null(tick_data = tick_disease_tmp,
 
 ```
 ```{r}
-jags.mat <- as.matrix(output)
-years <- 2009:2018
-
-for(i in 1:10){
-
-hist(rbinom(10000, as.numeric(tick_disease_tmp$Population[i]),mean(jags.mat[,i])), main = years[i])
+#jags.mat <- as.matrix(output)
+#years <- 2009:2018
+#
+#for(i in 1:10){
+#
+#hist(rbinom(10000, as.numeric(tick_disease_tmp$Population[i]),mean(jags.mat[,i])), main = years[i])
 #hist(jags.mat[,i], main = paste("Probability in year", years[i]))
-}
+#}
 
 
 ```
