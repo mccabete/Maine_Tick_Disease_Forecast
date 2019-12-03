@@ -189,7 +189,7 @@ note: Frye_Island is failing to converge, becuase a special case of data. Long_I
 #towns_to_run <- c("Windham",  "Gorham" , "New_Gloucester"  )
 for (i in seq_along(towns_to_run)){
   #i = 4
- i = 6
+ #i = 6
  town_name <- towns_to_run[i]
  
 
@@ -206,7 +206,7 @@ tick_disease_tmp <- dplyr::arrange(tick_disease_tmp, by = tick_disease_tmp$Year)
 data_list <- list(#y = tick_disease_tmp$Number, 
                   #prob_a = town_x_ic$prob_a[town_x_ic$Location == town_name] ,
                   #prob_b = town_x_ic$prob_b[town_x_ic$Location == town_name],
-                  rate = town_x_ic$rate[town_x_ic$Location == town_name],
+                  #rate = town_x_ic$rate[town_x_ic$Location == town_name],
                   mean_error = 0, 
                   var_error = 0.0003, 
                   pop = as.numeric(tick_disease_tmp$Population))
